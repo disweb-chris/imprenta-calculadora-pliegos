@@ -187,7 +187,16 @@ o reescribirlo entero) se tomó **el segundo**, por tres razones:
 
 ### Cómo se instala
 
-1. Reemplazar el contenido del `<script>` del widget por `web/calculadora.js`.
+1. Subir los dos archivos y cargarlos **en este orden**:
+
+   ```html
+   <script src="/js/pose.bundle.js"></script>   <!-- respaldo offline -->
+   <script src="/js/calculadora.js"></script>   <!-- el widget -->
+   ```
+
+   El bundle es opcional: sin él el widget funciona igual, sólo pierde el
+   respaldo.
+
 2. Apuntar al servicio con `data-api="https://…"` en el div
    `.io-pliegos-calc`, o dejando el default que ya trae el archivo.
 3. Restringir CORS en Cloud Run:
@@ -199,10 +208,17 @@ o reescribirlo entero) se tomó **el segundo**, por tres razones:
   rato tarda alrededor de un segundo. El widget muestra el resultado anterior
   atenuado mientras espera, así que se nota poco; si molesta, se resuelve con
   `--min-instances 1`.
-- **Si el servicio no responde**, el widget muestra un error y no cotiza. Es
-  deliberado: es preferible a que el sitio dé un precio con la aritmética
-  vieja, que es la que tiene los bugs. La alternativa —dejar el cálculo local
-  como respaldo— reintroduce la duplicación que esta migración vino a sacar.
+- **Si el servicio no responde**, el widget cae a `web/pose.bundle.js` y sigue
+  cotizando, con un aviso arriba del resultado. Ese bundle **no es una segunda
+  implementación**: es el mismo `src/` empaquetado con esbuild
+  (`npm run build:web`), así que el respaldo y el servicio no pueden dar
+  números distintos. `tests/bundle.test.js` falla si el bundle queda
+  desactualizado respecto de `src/`.
+- **Un 4xx no dispara el respaldo.** Que el servicio conteste "la pieza no
+  entra en el pliego" es una respuesta correcta, no una caída: recalcularlo
+  local daría el mismo error y taparía el mensaje.
+- **Sin servicio y sin el bundle cargado**, el widget avisa y no cotiza. Es
+  preferible a inventar un precio.
 
 ---
 

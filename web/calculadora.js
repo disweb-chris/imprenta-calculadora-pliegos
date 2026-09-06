@@ -9,6 +9,10 @@
  * Agrega el preview de la pose con las marcas de corte, que es lo que la
  * versión anterior no podía hacer.
  *
+ * Si el servicio no responde, cae a `pose.bundle.js`, que es el MISMO código
+ * del servicio empaquetado para el navegador — no una segunda implementación
+ * de la aritmética. Sin el bundle cargado, el widget avisa y no cotiza.
+ *
  * Configuración: `data-api="https://…"` en el contenedor `.io-pliegos-calc`,
  * o `window.IO_CALC_API`. Sin nada, usa el default de abajo.
  */
@@ -60,6 +64,8 @@
       '.io-pliegos-calc .io-pc-cara svg{width:100%;height:auto;display:block;border:1px solid var(--io-border);border-radius:8px}',
       '.io-pliegos-calc .io-pc-out.cargando{opacity:.55;transition:opacity .12s}',
       '.io-pliegos-calc .io-pc-warn{background:#FFF8E6;border:1px solid #F5D77E;color:#6B4E00;border-radius:12px;padding:10px 12px;font-size:12px;margin-top:10px}',
+      '.io-pliegos-calc .io-pc-offline{display:flex;gap:8px;align-items:center;background:#FFF8E6;border-bottom:1px solid #F5D77E;color:#6B4E00;padding:8px 14px;font-size:11px;line-height:1.4}',
+      '.io-pliegos-calc .io-pc-offline b{font-weight:800}',
       '@media (max-width:600px){.io-pliegos-calc .io-pc-caras.dos{grid-template-columns:1fr}}',
     ].join('\n');
     document.head.appendChild(st);
@@ -117,7 +123,7 @@
       return '<div class="row' + (clases ? ' ' + clases : '') + '"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>';
     }
 
-    function pintar(r) {
+    function pintar(r, sinConexion) {
       var pose = r.pose;
       var pl = r.pliegos;
       var co = r.cotizacion;
@@ -133,8 +139,13 @@
       var orientacion = pose.rotada ? 'Rotada (90°)' : 'Normal';
       var marcas = (pose.columnas + pose.filas) * 4;
 
+      var aviso = sinConexion
+        ? '<div class="io-pc-offline"><b>Sin conexión al servicio.</b> Calculado en este navegador con el mismo motor; ' +
+          'revisá el presupuesto antes de mandarlo a imprimir.</div>'
+        : '';
+
       var html =
-        '<div class="io-pc-box"><div class="io-pc-kv">' +
+        '<div class="io-pc-box">' + aviso + '<div class="io-pc-kv">' +
         fila('Papel', escapar(valor(calc, 'paperType') || '—')) +
         fila('Medida pliego', etiquetaPliego()) +
         fila('Pieza efectiva (con demasía)', fmt2(pose.piezaConSangrado.ancho / 10) + ' × ' + fmt2(pose.piezaConSangrado.alto / 10) + ' cm') +
@@ -183,6 +194,17 @@
       out.innerHTML = html + '</div>';
     }
 
+    /** Respaldo: el mismo motor del servicio, empaquetado en pose.bundle.js. */
+    function calcularLocal(cuerpo) {
+      if (!window.IOPose || !window.IOPose.calcularDesdeElSitio) return null;
+      try {
+        return { ok: true, datos: window.IOPose.calcularDesdeElSitio(cuerpo) };
+      } catch (e) {
+        // Un error de negocio local es una respuesta válida, no una falla.
+        return { ok: false, mensaje: e.message };
+      }
+    }
+
     function calcular() {
       var cuerpo = payload();
 
@@ -205,20 +227,28 @@
       })
         .then(function (res) {
           return res.json().then(function (cuerpoRes) {
-            if (!res.ok) throw new Error(cuerpoRes.error || 'No se pudo calcular.');
+            // Un 4xx es el servicio respondiendo bien que el pedido está mal:
+            // no es una caída, así que no corresponde el respaldo.
+            if (!res.ok) throw Object.assign(new Error(cuerpoRes.error || 'No se pudo calcular.'), { deNegocio: true });
             return cuerpoRes;
           });
         })
         .then(function (r) {
           out.classList.remove('cargando');
-          pintar(r);
+          pintar(r, false);
         })
         .catch(function (e) {
           if (e.name === 'AbortError') return;
           out.classList.remove('cargando');
-          error(e.message === 'Failed to fetch'
-            ? 'No se pudo conectar con el servicio de cálculo. Revisá la conexión y probá de nuevo.'
-            : e.message);
+
+          if (e.deNegocio) return error(e.message);
+
+          var local = calcularLocal(cuerpo);
+          if (!local) {
+            return error('No se pudo conectar con el servicio de cálculo. Revisá la conexión y probá de nuevo.');
+          }
+          if (!local.ok) return error(local.mensaje);
+          return pintar(local.datos, true);
         });
     }
 

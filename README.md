@@ -39,8 +39,11 @@ src/
 │   └── defaults.js     demasía, espaciado y perfiles calibrados
 └── utils/logger.js     logger JSON lines para Cloud Logging
 
+src/web/entrada.js      punto de entrada del bundle para el navegador
+
 web/
 ├── calculadora.js      widget del sitio, ahora cliente del servicio
+├── pose.bundle.js      el mismo core empaquetado: respaldo si Cloud Run cae
 └── demo.html           el widget completo para probar local
 ```
 
@@ -109,7 +112,9 @@ Qué cubre:
   La pose de tarot es una referencia, no el caso general.
 - Un **golden test** contra la calculadora que está hoy en el sitio: corre las
   dos implementaciones sobre 378 combinaciones y compara campo por campo.
-- **12 tests de navegador** del widget contra el servicio real.
+- **17 tests de navegador** del widget contra el servicio real, incluido el
+  respaldo offline: con el servicio caído tiene que dar las mismas filas y el
+  mismo SVG.
 
 ---
 
@@ -180,9 +185,15 @@ HTML, mismo CSS, mismos nombres de campo y misma clave de `localStorage`, pero
 los números salen del servicio y además muestra el preview de la pose con las
 marcas de guillotina.
 
+Si el servicio no responde, cae a `web/pose.bundle.js` y sigue cotizando, con
+un aviso. Ese bundle es el mismo `src/` empaquetado con esbuild, no una segunda
+implementación: `npm run build:web` lo regenera y `tests/bundle.test.js` falla
+si queda desactualizado.
+
 Para probarlo sin tocar producción:
 
 ```bash
+npm run build:web              # regenera el bundle de respaldo
 npm start                      # el servicio en :8080
 npx http-server web -p 8096    # o cualquier estático
 # abrir http://localhost:8096/demo.html

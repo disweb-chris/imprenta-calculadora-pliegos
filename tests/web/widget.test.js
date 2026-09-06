@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -186,5 +186,78 @@ describe('widget contra el servicio', () => {
     await abrir();
     await escribir('itemH', '10');
     expect(errores).toEqual([]);
+  });
+});
+
+describe('respaldo local cuando el servicio no responde', () => {
+  /** Corta la conexión al servicio interceptando la request en el navegador. */
+  async function cortarServicio() {
+    await pagina.route('**/api/calcular/compat', (ruta) => ruta.abort('failed'));
+  }
+
+  async function restablecerServicio() {
+    await pagina.unroute('**/api/calcular/compat');
+  }
+
+  afterEach(async () => {
+    await restablecerServicio();
+  });
+
+  it('sigue cotizando con el bundle local y avisa que fue sin conexión', async () => {
+    await abrir();
+    const conServicio = await filas();
+
+    await cortarServicio();
+    await escribir('qty', '79');
+    await escribir('qty', '78');
+
+    expect(await pagina.$('.io-pc-offline')).not.toBeNull();
+    expect(await pagina.textContent('.io-pc-offline')).toMatch(/Sin conexión al servicio/);
+
+    const sinServicio = await filas();
+    expect(sinServicio).toEqual(conServicio);
+  });
+
+  it('el respaldo dibuja la pose igual que el servicio', async () => {
+    await abrir();
+    const conServicio = await pagina.evaluate(() =>
+      [...document.querySelectorAll('.io-pc-cara svg')].map((s) => s.outerHTML));
+
+    await cortarServicio();
+    await escribir('qty', '79');
+
+    const sinServicio = await pagina.evaluate(() =>
+      [...document.querySelectorAll('.io-pc-cara svg')].map((s) => s.outerHTML));
+    expect(sinServicio).toEqual(conServicio);
+  });
+
+  it('los errores de negocio del servicio no disparan el respaldo', async () => {
+    await abrir();
+    await escribir('itemW', '90');
+    expect(await pagina.textContent('.io-pc-err')).toMatch(/no entra en un pliego/);
+    expect(await pagina.$('.io-pc-offline')).toBeNull();
+  });
+
+  it('sin servicio y sin bundle, avisa en vez de mentir un precio', async () => {
+    await abrir();
+    // `delete` no borra un global declarado con var (el bundle es un IIFE),
+    // así que se anula el valor, que es lo que el widget chequea.
+    await pagina.evaluate(() => { window.IOPose = undefined; });
+    await cortarServicio();
+    await escribir('qty', '77');
+
+    expect(await pagina.textContent('.io-pc-err')).toMatch(/No se pudo conectar/);
+    expect(await pagina.$('.io-pc-box')).toBeNull();
+  });
+
+  it('vuelve al servicio en cuanto responde de nuevo', async () => {
+    await abrir();
+    await cortarServicio();
+    await escribir('qty', '79');
+    expect(await pagina.$('.io-pc-offline')).not.toBeNull();
+
+    await restablecerServicio();
+    await escribir('qty', '78');
+    expect(await pagina.$('.io-pc-offline')).toBeNull();
   });
 });
