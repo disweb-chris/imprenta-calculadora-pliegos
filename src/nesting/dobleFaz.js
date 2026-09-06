@@ -72,10 +72,21 @@ function espejarMarcas(marcasCorte, { pliego, ejeVolteo }) {
 
 /** Espeja los márgenes del bloque (relevante sólo si el bloque no está centrado). */
 function espejarBloque(bloque, ejeVolteo) {
+  const s = bloque.margenSangrado;
   if (ejeVolteo === 'vertical') {
-    return { ...bloque, margenIzquierdo: bloque.margenDerecho, margenDerecho: bloque.margenIzquierdo };
+    return {
+      ...bloque,
+      margenIzquierdo: bloque.margenDerecho,
+      margenDerecho: bloque.margenIzquierdo,
+      margenSangrado: { ...s, izquierdo: s.derecho, derecho: s.izquierdo },
+    };
   }
-  return { ...bloque, margenSuperior: bloque.margenInferior, margenInferior: bloque.margenSuperior };
+  return {
+    ...bloque,
+    margenSuperior: bloque.margenInferior,
+    margenInferior: bloque.margenSuperior,
+    margenSangrado: { ...s, superior: s.inferior, inferior: s.superior },
+  };
 }
 
 /** Desvío máximo entre las marcas del frente y las del dorso, en mm. */
@@ -106,20 +117,13 @@ export function calcularPoseDobleFaz(params = {}) {
   const base = calcularPose(params);
 
   const { pliego, columnas, filas, bloque, marcasCorte, posiciones } = base;
-  const sangrado = base.parametros.sangrado;
-
   const posicionesDorso = posiciones
     .map((pos) => espejarPosicion(pos, { pliego, ejeVolteo, columnas, filas }))
     .sort((a, b) => a.indice - b.indice);
 
   const marcasDorso = espejarMarcas(marcasCorte, { pliego, ejeVolteo });
   const bloqueDorso = espejarBloque(bloque, ejeVolteo);
-  const ticksDorso = generarTicks({
-    pliego,
-    bloque: bloqueDorso,
-    marcasCorte: marcasDorso,
-    sangrado,
-  });
+  const ticksDorso = generarTicks({ pliego, bloque: bloqueDorso, marcasCorte: marcasDorso });
 
   const mapeo = posiciones.map((pos, i) => ({
     indice: pos.indice,

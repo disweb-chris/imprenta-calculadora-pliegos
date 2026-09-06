@@ -226,3 +226,100 @@ Igual, sobre una pose doble faz. La cara se pasa por query string o en el body
   "campo": "pieza"
 }
 ```
+
+---
+
+## `POST /api/calcular`
+
+Trabajo completo: pose + pliegos + cotización. Contrato nativo, todo en
+milímetros y con nombres en español.
+
+### Request
+
+```json
+{
+  "pliego": { "ancho": 320, "alto": 470 },
+  "pieza": { "ancho": 90, "alto": 50 },
+  "sangrado": 3,
+  "espaciado": 0,
+  "margenMinimo": 0,
+  "cantidad": 100,
+  "merma": 2,
+  "dobleFaz": false,
+  "armarPose": false,
+  "costoPapel": 120,
+  "costoImpresion": 80,
+  "costoFijo": 5000,
+  "porcentajeProduccion": 15,
+  "porcentajeGanancia": 40,
+  "aplicarIva": true
+}
+```
+
+Con `armarPose: true` se devuelve además el layout completo (posiciones,
+marcas y ticks); si además `dobleFaz` es `true`, se devuelve la pose de las dos
+caras.
+
+### Response `200`
+
+```json
+{
+  "dobleFaz": false,
+  "piezasPorPliego": 24,
+  "pose": {
+    "cantidad": 24, "columnas": 3, "filas": 8,
+    "rotada": false, "orientacion": "vertical",
+    "piezaConSangrado": { "ancho": 96, "alto": 56 },
+    "aprovechamiento": 0.7181,
+    "bloque": { "...": "..." },
+    "alternativas": {
+      "normal": { "columnas": 3, "filas": 8, "cantidad": 24 },
+      "rotada": { "columnas": 5, "filas": 4, "cantidad": 20 }
+    },
+    "advertencias": []
+  },
+  "pliegos": {
+    "pliegosNetos": 5, "demasia": 2, "pliegosTotales": 7,
+    "pasadas": 7, "piezasProducidas": 168, "sobrante": 68
+  },
+  "cotizacion": {
+    "papel": 840, "impresion": 560, "costoFijo": 5000,
+    "costoTotal": 6400, "costoUnitario": 64,
+    "porcentajeProduccion": 15, "porcentajeGanancia": 40,
+    "precioFinal": 10304, "precioUnitario": 103.04,
+    "aplicarIva": true, "iva": 2163.84,
+    "precioFinalConIva": 12467.84, "precioUnitarioConIva": 124.68
+  }
+}
+```
+
+El orden de la cadena de costos importa y es el de producción: la ganancia se
+aplica sobre el costo **ya recargado** por producción.
+
+```
+costoTotal   = pliegos·costoPapel + impresiones·costoImpresion + costoFijo
+precioFinal  = costoTotal · (1 + %producción/100) · (1 + %ganancia/100)
+IVA          = precioFinal · 0.21
+```
+
+---
+
+## `POST /api/calcular/compat`
+
+Lo mismo, pero con **los nombres de campo y las unidades del formulario del
+sitio**: `sheetW`/`sheetH` e `itemW`/`itemH` en centímetros, `bleed` y `gutter`
+en milímetros.
+
+```json
+{
+  "sheetW": 32, "sheetH": 47, "itemW": 9, "itemH": 5,
+  "bleed": 3, "gutter": 0,
+  "qty": 100, "extraSheets": 2, "doubleFace": false,
+  "costPaper": 120, "costPrint": 80, "costSetup": 5000,
+  "prodPct": 15, "profitPct": 40, "applyVat": true
+}
+```
+
+La respuesta es idéntica a la de `/api/calcular`. Existe para que el widget
+pueda pasar a consumir el servicio sin tocar el HTML del formulario; ver
+[MIGRACION.md](MIGRACION.md).

@@ -26,16 +26,55 @@ describe('precioUnitarioPorEscala', () => {
 });
 
 describe('cotizar', () => {
-  it('suma materiales, impresión y costo fijo', () => {
-    expect(cotizar({ pliegosTotales: 10, precioPorPliego: 150, costoFijo: 500, pasadas: 2, precioPorPasada: 1000 })).toEqual({
-      materiales: 1500,
-      impresion: 2000,
-      costoFijo: 500,
-      total: 4000,
+  const BASE = {
+    cantidad: 100,
+    pliegos: 7,
+    impresiones: 7,
+    costoPapel: 120,
+    costoImpresion: 80,
+    costoFijo: 5000,
+  };
+
+  it('suma papel, impresión y costo fijo', () => {
+    expect(cotizar(BASE)).toMatchObject({
+      papel: 840,
+      impresion: 560,
+      costoFijo: 5000,
+      costoTotal: 6400,
+      costoUnitario: 64,
     });
   });
 
+  it('aplica ganancia sobre el costo ya recargado por producción', () => {
+    // 6400 × 1.15 = 7360 ; 7360 × 1.40 = 10304
+    // Si se aplicaran los dos porcentajes sobre el costo base daría 9920.
+    const r = cotizar({ ...BASE, porcentajeProduccion: 15, porcentajeGanancia: 40 });
+    expect(r.precioFinal).toBe(10304);
+    expect(r.precioUnitario).toBe(103.04);
+  });
+
+  it('calcula el IVA sobre el precio final', () => {
+    const r = cotizar({ ...BASE, porcentajeProduccion: 15, porcentajeGanancia: 40, aplicarIva: true });
+    expect(r.iva).toBe(2163.84);
+    expect(r.precioFinalConIva).toBe(12467.84);
+    expect(r.precioUnitarioConIva).toBe(124.68);
+  });
+
+  it('sin IVA no lo suma', () => {
+    const r = cotizar({ ...BASE, aplicarIva: false });
+    expect(r.iva).toBe(0);
+    expect(r.precioFinalConIva).toBe(r.precioFinal);
+  });
+
+  it('con todos los costos en cero devuelve cero', () => {
+    const r = cotizar({ cantidad: 100, pliegos: 7, impresiones: 7 });
+    expect(r.costoTotal).toBe(0);
+    expect(r.precioFinal).toBe(0);
+  });
+
   it('valida que no entren números negativos', () => {
-    expect(() => cotizar({ pliegosTotales: -1, precioPorPliego: 10 })).toThrow(/pliegosTotales/);
+    expect(() => cotizar({ ...BASE, pliegos: -1 })).toThrow(/pliegos/);
+    expect(() => cotizar({ ...BASE, costoPapel: -5 })).toThrow(/costoPapel/);
+    expect(() => cotizar({ ...BASE, cantidad: 0 })).toThrow(/mayor que cero/);
   });
 });

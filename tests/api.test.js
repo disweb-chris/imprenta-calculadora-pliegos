@@ -24,7 +24,7 @@ const TAROT = {
   pieza: { ancho: 70, alto: 120 },
   sangrado: 3,
   espaciado: 0,
-  margenMinimo: 10,
+  margenMinimo: 0,
 };
 
 describe('API', () => {
@@ -98,5 +98,56 @@ describe('API', () => {
 
   it('devuelve 404 en una ruta desconocida', async () => {
     expect((await fetch(`${base}/api/nada`)).status).toBe(404);
+  });
+});
+
+describe('API — trabajo completo', () => {
+  const TRABAJO = {
+    pliego: { ancho: 320, alto: 470 },
+    pieza: { ancho: 90, alto: 50 },
+    sangrado: 3,
+    cantidad: 100,
+    merma: 2,
+    costoPapel: 120,
+    costoImpresion: 80,
+    costoFijo: 5000,
+    porcentajeProduccion: 15,
+    porcentajeGanancia: 40,
+    aplicarIva: true,
+  };
+
+  it('POST /api/calcular resuelve pose, pliegos y cotización', async () => {
+    const r = await (await postJSON('/api/calcular', TRABAJO)).json();
+    expect(r.piezasPorPliego).toBe(24);
+    expect(r.pliegos).toMatchObject({ pliegosNetos: 5, pliegosTotales: 7, pasadas: 7 });
+    expect(r.cotizacion).toMatchObject({ costoTotal: 6400, precioFinal: 10304, precioFinalConIva: 12467.84 });
+  });
+
+  it('POST /api/calcular duplica las pasadas en doble faz', async () => {
+    const r = await (await postJSON('/api/calcular', { ...TRABAJO, dobleFaz: true })).json();
+    expect(r.pliegos.pasadas).toBe(14);
+  });
+
+  it('POST /api/calcular con armarPose devuelve el layout completo', async () => {
+    const r = await (await postJSON('/api/calcular', { ...TRABAJO, armarPose: true })).json();
+    expect(r.pose.posiciones).toHaveLength(24);
+    expect(r.pose.marcasCorte.verticales).toHaveLength(6);
+  });
+
+  it('POST /api/calcular/compat acepta el contrato del sitio (cm + nombres en inglés)', async () => {
+    const r = await (await postJSON('/api/calcular/compat', {
+      sheetW: 32, sheetH: 47, itemW: 9, itemH: 5,
+      bleed: 3, gutter: 0, extraSheets: 2, qty: 100, doubleFace: false,
+      costPaper: 120, costPrint: 80, costSetup: 5000,
+      prodPct: 15, profitPct: 40, applyVat: true,
+    })).json();
+    expect(r.piezasPorPliego).toBe(24);
+    expect(r.cotizacion.precioFinalConIva).toBe(12467.84);
+  });
+
+  it('POST /api/calcular/compat exige las medidas', async () => {
+    const res = await postJSON('/api/calcular/compat', { qty: 100 });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/centímetros/);
   });
 });

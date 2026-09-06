@@ -5,54 +5,61 @@
  * cartas): todas las piezas son el mismo rectángulo, así que la grilla regular
  * es óptima y además es la única que la guillotina puede cortar de una pasada.
  *
- * Modelo de márgenes — esto es lo importante y difiere del cálculo ingenuo:
+ * ── Modelo de medidas ────────────────────────────────────────────────────
  *
- *   calle = sangrado * 2 + espaciado     (separación entre dos trims contiguos)
- *   pitch = lado de la pieza + calle
+ *   caja de sangrado = trim + sangrado * 2      (la mancha de tinta de la pieza)
+ *   pitch            = trim + sangrado * 2 + espaciado
+ *   calle            = sangrado * 2 + espaciado (separación entre dos trims)
  *
- * Entre dos piezas contiguas hay una calle completa, pero DESPUÉS de la última
- * pieza no hay calle: lo que tiene que respetar el margen mínimo es el bloque
- * de TRIM, no el bloque de pitches. Por eso:
+ * N piezas ocupan `N · pitch − espaciado` de tinta: hay N cajas de sangrado
+ * separadas por N−1 espaciados. De ahí sale la cantidad que entra:
  *
- *   n = floor((util + calle) / pitch)     y NO     floor(util / pitch)
+ *   N = floor((pliego − margen · 2 + espaciado) / pitch)
  *
- * El sangrado exterior del bloque (3 mm) invade el margen, que es exactamente
- * lo que pasa en producción: en la pose de tarot de referencia el margen de
- * trim es 11 mm y el sangrado llega hasta los 8 mm del borde del pliego.
+ * Con `margen = 0` esto es exactamente la fórmula de la calculadora en
+ * producción, que suma la demasía a la pieza y hace
+ * `floor((pliego + separación) / (piezaEfectiva + separación))`.
  */
 
 /**
- * Calcula la grilla para una orientación concreta de la pieza.
- * @returns {{columnas:number, filas:number, cantidad:number}}
+ * Cuántas piezas de `lado` entran en `medida`.
+ * Todas las medidas en mm.
  */
-export function calcularGrilla({ pliego, pieza, calle, margenMinimo }) {
-  const utilAncho = pliego.ancho - margenMinimo * 2;
-  const utilAlto = pliego.alto - margenMinimo * 2;
+export function contar({ medida, lado, sangrado, espaciado, margenMinimo }) {
+  const pitch = lado + sangrado * 2 + espaciado;
+  if (pitch <= 0) return 0;
+  const disponible = medida - margenMinimo * 2 + espaciado;
+  if (disponible <= 0) return 0;
+  return Math.max(0, Math.floor(disponible / pitch));
+}
 
-  const columnas = contar(utilAncho, pieza.ancho, calle);
-  const filas = contar(utilAlto, pieza.alto, calle);
-
+/** Calcula la grilla para una orientación concreta de la pieza. */
+export function calcularGrilla({ pliego, pieza, sangrado, espaciado, margenMinimo }) {
+  const columnas = contar({ medida: pliego.ancho, lado: pieza.ancho, sangrado, espaciado, margenMinimo });
+  const filas = contar({ medida: pliego.alto, lado: pieza.alto, sangrado, espaciado, margenMinimo });
   return { columnas, filas, cantidad: columnas * filas };
 }
 
-function contar(disponible, lado, calle) {
-  if (disponible <= 0) return 0;
-  const n = Math.floor((disponible + calle) / (lado + calle));
-  return Math.max(0, n);
-}
+/** Tinta que ocupa el bloque en un eje: N cajas de sangrado y N−1 espaciados. */
+const anchoDeTinta = (n, lado, sangrado, espaciado) =>
+  n > 0 ? n * (lado + sangrado * 2) + (n - 1) * espaciado : 0;
 
 /**
- * Resuelve la mejor grilla probando la pieza en su orientación original y,
- * si está permitido, girada 90°. Gana la que entre más piezas; a igualdad de
- * cantidad se prefiere no rotar (menos manipulación del arte).
+ * Resuelve la mejor grilla probando la pieza derecha y, si está permitido,
+ * girada 90°. Gana la que entre más piezas.
  *
- * @returns {{columnas:number, filas:number, cantidad:number, rotada:boolean,
- *            piezaEfectiva:{ancho:number,alto:number}, orientacion:string}}
+ * ── Desempate ────────────────────────────────────────────────────────────
+ *
+ * A igualdad de cantidad se prefiere **no rotar**. La calculadora en
+ * producción desempata por `sobranteAncho + sobranteAlto` (suma un sobrante
+ * horizontal con uno vertical, que no es una magnitud comparable) y por eso
+ * elige mal el mazo de tarot: 2×6 rotada en vez de 4×3, porque 8.2 < 10.8.
+ * Las dos poses dan 12 cartas, pero la rotada deja 7 mm de margen vertical
+ * contra 46 mm de la derecha, y obliga a girar el arte de todas las cartas.
+ * Ver docs/NESTING.md § "Desempate de orientación".
  */
-export function resolverShelf({ pliego, pieza, calle, margenMinimo, permitirRotacion }) {
-  const candidatos = [
-    { rotada: false, piezaEfectiva: { ancho: pieza.ancho, alto: pieza.alto } },
-  ];
+export function resolverShelf({ pliego, pieza, sangrado, espaciado, margenMinimo, permitirRotacion }) {
+  const candidatos = [{ rotada: false, piezaEfectiva: { ancho: pieza.ancho, alto: pieza.alto } }];
 
   if (permitirRotacion && pieza.ancho !== pieza.alto) {
     candidatos.push({ rotada: true, piezaEfectiva: { ancho: pieza.alto, alto: pieza.ancho } });
@@ -63,15 +70,36 @@ export function resolverShelf({ pliego, pieza, calle, margenMinimo, permitirRota
     const grilla = calcularGrilla({
       pliego,
       pieza: candidato.piezaEfectiva,
-      calle,
+      sangrado,
+      espaciado,
       margenMinimo,
     });
-    const resultado = { ...grilla, ...candidato };
-    if (!mejor || resultado.cantidad > mejor.cantidad) mejor = resultado;
+    // Sólo gana por cantidad estricta: a igualdad se queda el primero, que es
+    // el candidato sin rotar.
+    if (!mejor || grilla.cantidad > mejor.cantidad) mejor = { ...grilla, ...candidato };
   }
+
+  const { piezaEfectiva, columnas, filas } = mejor;
+
+  // Las dos orientaciones, para que la UI pueda mostrarlas lado a lado.
+  const alternativas = {
+    normal: calcularGrilla({ pliego, pieza, sangrado, espaciado, margenMinimo }),
+    rotada: calcularGrilla({
+      pliego,
+      pieza: { ancho: pieza.alto, alto: pieza.ancho },
+      sangrado,
+      espaciado,
+      margenMinimo,
+    }),
+  };
 
   return {
     ...mejor,
-    orientacion: mejor.piezaEfectiva.alto >= mejor.piezaEfectiva.ancho ? 'vertical' : 'horizontal',
+    alternativas,
+    orientacion: piezaEfectiva.alto >= piezaEfectiva.ancho ? 'vertical' : 'horizontal',
+    tinta: {
+      ancho: anchoDeTinta(columnas, piezaEfectiva.ancho, sangrado, espaciado),
+      alto: anchoDeTinta(filas, piezaEfectiva.alto, sangrado, espaciado),
+    },
   };
 }

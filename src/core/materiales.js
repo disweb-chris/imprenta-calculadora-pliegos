@@ -26,18 +26,18 @@ import { PERFILES_SOPORTE } from '../config/defaults.js';
 /** @type {Material[]} */
 const CATALOGO = [
   {
-    id: 'papel-ilustracion-a3',
-    nombre: 'Papel ilustración A3',
+    id: 'papel-obra-32x47',
+    nombre: 'Papel obra 32 × 47',
     soporte: 'hoja',
-    pliego: { ancho: 297, alto: 420 },
+    pliego: { ancho: 320, alto: 470 },
     perfilPose: PERFILES_SOPORTE.hoja,
     precio: null,
   },
   {
-    id: 'papel-ilustracion-320x470',
-    nombre: 'Papel ilustración 320×470',
+    id: 'papel-ilustracion-a3',
+    nombre: 'Papel ilustración A3',
     soporte: 'hoja',
-    pliego: { ancho: 320, alto: 470 },
+    pliego: { ancho: 297, alto: 420 },
     perfilPose: PERFILES_SOPORTE.hoja,
     precio: null,
   },

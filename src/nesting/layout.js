@@ -11,25 +11,53 @@ import { MARCAS } from '../config/defaults.js';
 const redondear = (n) => Math.round(n * 1e4) / 1e4;
 
 /**
- * Centra el bloque de trim en el pliego.
+ * Centra el bloque en el pliego y devuelve sus dos juegos de márgenes.
  *
  * `margenMinimo` es una RESTRICCIÓN, no la posición final: el sobrante entre
- * el bloque y el pliego se reparte en partes iguales entre los dos márgenes.
- * En la pose de tarot de referencia eso da 11 mm de margen lateral y 49 mm de
- * margen superior/inferior — distintos entre sí, que es la prueba de que el
- * bloque va centrado y no anclado.
+ * la tinta y el pliego se reparte en partes iguales entre los dos lados.
+ *
+ * Se reportan dos márgenes distintos porque el taller usa los dos:
+ *
+ *   margenSangrado → del borde del pliego al borde de la TINTA. Es el que
+ *                    tiene que respetar la pinza de la máquina y donde entran
+ *                    las marcas de corte.
+ *   margenTrim     → del borde del pliego a la primera línea de CORTE.
+ *                    Siempre es `margenSangrado + sangrado`.
+ *
+ * En la pose de tarot de referencia eso da 8 mm de tinta / 11 mm de trim a los
+ * costados, y 46 / 49 mm arriba y abajo. Que lateral y vertical den distinto
+ * es la prueba de que el bloque va centrado y no anclado a un margen fijo.
  */
-export function calcularBloque({ pliego, piezaEfectiva, columnas, filas, calle }) {
-  const anchoBloque = columnas > 0 ? columnas * piezaEfectiva.ancho + (columnas - 1) * calle : 0;
-  const altoBloque = filas > 0 ? filas * piezaEfectiva.alto + (filas - 1) * calle : 0;
+export function calcularBloque({ pliego, piezaEfectiva, columnas, filas, sangrado, espaciado }) {
+  const calle = sangrado * 2 + espaciado;
+
+  const tintaAncho = columnas > 0 ? columnas * (piezaEfectiva.ancho + sangrado * 2) + (columnas - 1) * espaciado : 0;
+  const tintaAlto = filas > 0 ? filas * (piezaEfectiva.alto + sangrado * 2) + (filas - 1) * espaciado : 0;
+
+  const trimAncho = columnas > 0 ? columnas * piezaEfectiva.ancho + (columnas - 1) * calle : 0;
+  const trimAlto = filas > 0 ? filas * piezaEfectiva.alto + (filas - 1) * calle : 0;
+
+  const margenSangradoX = (pliego.ancho - tintaAncho) / 2;
+  const margenSangradoY = (pliego.alto - tintaAlto) / 2;
 
   return {
-    ancho: redondear(anchoBloque),
-    alto: redondear(altoBloque),
-    margenIzquierdo: redondear((pliego.ancho - anchoBloque) / 2),
-    margenDerecho: redondear((pliego.ancho - anchoBloque) / 2),
-    margenSuperior: redondear((pliego.alto - altoBloque) / 2),
-    margenInferior: redondear((pliego.alto - altoBloque) / 2),
+    /** Bloque de líneas de corte: de la primera a la última. */
+    ancho: redondear(trimAncho),
+    alto: redondear(trimAlto),
+    /** Bloque de tinta: incluye el sangrado exterior. */
+    tinta: { ancho: redondear(tintaAncho), alto: redondear(tintaAlto) },
+
+    margenIzquierdo: redondear(margenSangradoX + sangrado),
+    margenDerecho: redondear(margenSangradoX + sangrado),
+    margenSuperior: redondear(margenSangradoY + sangrado),
+    margenInferior: redondear(margenSangradoY + sangrado),
+
+    margenSangrado: {
+      izquierdo: redondear(margenSangradoX),
+      derecho: redondear(margenSangradoX),
+      superior: redondear(margenSangradoY),
+      inferior: redondear(margenSangradoY),
+    },
   };
 }
 
@@ -100,26 +128,22 @@ export function generarMarcasCorte({ bloque, piezaEfectiva, columnas, filas, cal
  * Convierte las líneas de trim en segmentos dibujables (ticks).
  *
  * Los ticks viven SOLO en el margen del pliego, nunca cruzando el arte:
- * arrancan donde termina la caja de sangrado del bloque y se alejan del arte.
+ * arrancan donde termina la tinta del bloque y se alejan hacia el borde.
  * Cada línea de trim vertical genera un tick arriba y otro abajo; cada línea
  * horizontal, uno a izquierda y otro a derecha.
  */
-export function generarTicks({ pliego, bloque, marcasCorte, sangrado, largo = MARCAS.largo, separacion }) {
-  const sep = separacion ?? MARCAS.separacion ?? sangrado;
+export function generarTicks({ pliego, bloque, marcasCorte, largo = MARCAS.largo }) {
   const ticks = [];
+  const m = bloque.margenSangrado;
 
-  const topeSuperior = bloque.margenSuperior - sep;
-  const topeInferior = pliego.alto - bloque.margenInferior + sep;
   for (const x of marcasCorte.verticales) {
-    ticks.push({ orientacion: 'vertical', borde: 'superior', x1: x, y1: redondear(topeSuperior - largo), x2: x, y2: redondear(topeSuperior) });
-    ticks.push({ orientacion: 'vertical', borde: 'inferior', x1: x, y1: redondear(topeInferior), x2: x, y2: redondear(topeInferior + largo) });
+    ticks.push({ orientacion: 'vertical', borde: 'superior', x1: x, y1: redondear(m.superior - largo), x2: x, y2: redondear(m.superior) });
+    ticks.push({ orientacion: 'vertical', borde: 'inferior', x1: x, y1: redondear(pliego.alto - m.inferior), x2: x, y2: redondear(pliego.alto - m.inferior + largo) });
   }
 
-  const topeIzquierdo = bloque.margenIzquierdo - sep;
-  const topeDerecho = pliego.ancho - bloque.margenDerecho + sep;
   for (const y of marcasCorte.horizontales) {
-    ticks.push({ orientacion: 'horizontal', borde: 'izquierdo', x1: redondear(topeIzquierdo - largo), y1: y, x2: redondear(topeIzquierdo), y2: y });
-    ticks.push({ orientacion: 'horizontal', borde: 'derecho', x1: redondear(topeDerecho), y1: y, x2: redondear(topeDerecho + largo), y2: y });
+    ticks.push({ orientacion: 'horizontal', borde: 'izquierdo', x1: redondear(m.izquierdo - largo), y1: y, x2: redondear(m.izquierdo), y2: y });
+    ticks.push({ orientacion: 'horizontal', borde: 'derecho', x1: redondear(pliego.ancho - m.derecho), y1: y, x2: redondear(pliego.ancho - m.derecho + largo), y2: y });
   }
 
   return ticks;
@@ -130,21 +154,20 @@ export function generarTicks({ pliego, bloque, marcasCorte, sangrado, largo = MA
  * No es un error fatal: se reporta como advertencia para que el operador
  * decida (a veces se imprime con pinza y sobra papel fuera del pliego útil).
  */
-export function revisarEspacioDeMarcas({ pliego, bloque, sangrado, largo = MARCAS.largo, separacion }) {
-  const sep = separacion ?? MARCAS.separacion ?? sangrado;
-  const necesario = sep + largo;
+export function revisarEspacioDeMarcas({ bloque, largo = MARCAS.largo }) {
+  const m = bloque.margenSangrado;
   const advertencias = [];
 
-  if (bloque.margenIzquierdo < necesario || bloque.margenDerecho < necesario) {
+  if (m.izquierdo < largo || m.derecho < largo) {
     advertencias.push(
-      `El margen lateral (${bloque.margenIzquierdo} mm) es menor que los ${necesario} mm ` +
-        'que necesitan las marcas de corte; los ticks horizontales se recortan contra el borde.',
+      `Del borde del pliego a la tinta quedan ${m.izquierdo} mm a los costados, menos que los ` +
+        `${largo} mm del tick: las marcas de corte horizontales se recortan contra el borde.`,
     );
   }
-  if (bloque.margenSuperior < necesario || bloque.margenInferior < necesario) {
+  if (m.superior < largo || m.inferior < largo) {
     advertencias.push(
-      `El margen superior/inferior (${bloque.margenSuperior} mm) es menor que los ${necesario} mm ` +
-        'que necesitan las marcas de corte; los ticks verticales se recortan contra el borde.',
+      `Del borde del pliego a la tinta quedan ${m.superior} mm arriba y abajo, menos que los ` +
+        `${largo} mm del tick: las marcas de corte verticales se recortan contra el borde.`,
     );
   }
 

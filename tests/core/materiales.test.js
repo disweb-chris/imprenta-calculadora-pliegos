@@ -23,7 +23,7 @@ describe('catálogo de materiales', () => {
   it('arma los parámetros de pose de un material, con overrides', () => {
     const params = parametrosDePose('vinilo-mate', { margenMinimo: 25 });
     expect(params.pliego).toEqual({ ancho: 1000, alto: 1000 });
-    expect(params.espaciado).toBe(5);
+    expect(params.espaciado).toBe(6);
     expect(params.margenMinimo).toBe(25);
   });
 

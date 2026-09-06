@@ -22,7 +22,9 @@ src/
 ├── core/            # lógica de negocio pura
 │   ├── materiales.js   catálogo: geometría + perfil de pose por material
 │   ├── pliegos.js      pliegos necesarios para una tirada
-│   └── precios.js      escalas por cantidad y cotización
+│   ├── precios.js      escalas por cantidad, costos, % y IVA
+│   ├── trabajo.js      composición: pose + pliegos + cotización
+│   └── unidades.js     conversión cm ↔ mm
 ├── nesting/         # armado de pose
 │   ├── shelf.js        estrategia de grilla regular
 │   ├── layout.js       posiciones, líneas de trim y ticks de guillotina
@@ -34,7 +36,7 @@ src/
 │   ├── server.js       Express
 │   └── routes/
 ├── config/
-│   └── defaults.js     márgenes, sangrado y perfiles calibrados
+│   └── defaults.js     demasía, espaciado y perfiles calibrados
 └── utils/logger.js     logger JSON lines para Cloud Logging
 ```
 
@@ -102,6 +104,8 @@ medidas en el pliego real, con tolerancia de ±0.5 mm.
 | Método | Ruta | Qué hace |
 |---|---|---|
 | `GET` | `/health` | Healthcheck de Cloud Run |
+| `POST` | `/api/calcular` | Trabajo completo: pose + pliegos + cotización |
+| `POST` | `/api/calcular/compat` | Igual, con los nombres y unidades del formulario del sitio |
 | `GET` | `/api/materiales` | Catálogo con geometría y perfil de pose |
 | `GET` | `/api/materiales/:id` | Un material |
 | `POST` | `/api/nesting/calcular` | Pose de una cara: cantidad + layout + marcas |
@@ -111,6 +115,7 @@ medidas en el pliego real, con tolerancia de ±0.5 mm.
 
 Contrato completo con requests y responses de ejemplo: **[docs/API.md](docs/API.md)**.
 Cómo funciona el algoritmo y cómo se calibró: **[docs/NESTING.md](docs/NESTING.md)**.
+Estado del port de la calculadora del sitio: **[docs/MIGRACION.md](docs/MIGRACION.md)**.
 
 ---
 
@@ -154,21 +159,27 @@ Secrets que necesita el workflow: `GCP_WORKLOAD_IDENTITY_PROVIDER` y
 
 ---
 
-## Pendiente de migración
+## Estado de la migración
 
-El servicio anterior sigue vivo en
+La calculadora que está hoy en el sitio **no es un servicio**: es un widget que
+calcula todo en el navegador. Su aritmética está portada completa a
+`src/core/`, y `tests/core/compatibilidadWidget.test.js` corre las dos
+implementaciones sobre 378 combinaciones para probar que dan lo mismo.
 
-```
-https://io-calculadora-pliegos-919246442188.us-central1.run.app
-```
+`POST /api/calcular/compat` habla el mismo contrato que el formulario (mismos
+nombres de campo, cm para las medidas y mm para demasía y separación), así que
+el widget puede pasar a consumir el servicio sin tocar el HTML.
 
-y **su código todavía no está en este repo**. Falta:
+En el camino aparecieron tres bugs de producción; dos están corregidos en el
+port y uno es de la UI. El detalle, con el impacto medido de cada uno, está en
+**[docs/MIGRACION.md](docs/MIGRACION.md)**.
 
-- Portar los endpoints existentes **sin romper el contrato** — producción los
-  consume hoy.
-- Traer la tabla de precios real. Por eso `materiales.precio` está en `null` y
-  `src/core/precios.js` recibe la tabla como argumento en lugar de tenerla
-  hardcodeada: no se inventó ningún número de negocio.
+Lo que sigue pendiente:
+
+- **Decidir si el widget pasa a llamar al servicio** o sigue calculando local.
+- **La tabla de precios real.** `materiales.precio` está en `null` y
+  `src/core/precios.js` recibe todos los importes como argumento en lugar de
+  tenerlos hardcodeados: no se inventó ningún número de negocio.
 
 ---
 

@@ -13,7 +13,9 @@ const PARAMETROS = {
   pieza: { ancho: 70, alto: 120 },
   sangrado: 3,
   espaciado: 0,
-  margenMinimo: 10,
+  // La pose real no tiene margen: los 11 mm laterales son sobrante del
+  // centrado, no una restricción. Ver el test de más abajo.
+  margenMinimo: 0,
   permitirRotacion: true,
 };
 
@@ -39,11 +41,26 @@ describe('pose de referencia — mazo de tarot 320×470', () => {
     expect(pose.pitch).toEqual({ x: 76, y: 126 });
   });
 
-  it('centra el bloque: 11 mm de margen lateral y 49 mm arriba/abajo', () => {
+  it('centra el bloque: 11 mm de margen de trim lateral y 49 mm arriba/abajo', () => {
     expect(pose.bloque.margenIzquierdo).toBeCloseTo(11, 5);
     expect(pose.bloque.margenDerecho).toBeCloseTo(11, 5);
     expect(pose.bloque.margenSuperior).toBeCloseTo(49, 5);
     expect(pose.bloque.margenInferior).toBeCloseTo(49, 5);
+  });
+
+  it('deja 8 mm de margen de tinta a los costados y 46 mm arriba/abajo', () => {
+    // El sangrado exterior invade el margen: el trim está a 11 mm del borde
+    // pero la mancha de tinta llega hasta los 8 mm.
+    expect(pose.bloque.margenSangrado.izquierdo).toBeCloseTo(8, 5);
+    expect(pose.bloque.margenSangrado.superior).toBeCloseTo(46, 5);
+  });
+
+  it('con un margen de pinza de 10 mm la pose ya NO entra en 4 columnas', () => {
+    // Deja constancia de que la pose de referencia se arma sin margen. Pedir
+    // 10 mm de pinza obliga a bajar a 3 columnas y cambia el trabajo.
+    const conPinza = calcularPose({ ...PARAMETROS, margenMinimo: 10 });
+    expect(conPinza.alternativas.normal).toMatchObject({ columnas: 3, filas: 3, cantidad: 9 });
+    expect(conPinza.cantidad).toBeLessThan(pose.cantidad);
   });
 
   it('los márgenes lateral y vertical son distintos (bloque centrado, no anclado)', () => {
@@ -82,6 +99,7 @@ describe('pose de referencia — mazo de tarot 320×470', () => {
   });
 
   it('mantiene las marcas fuera del arte, dentro del margen', () => {
+    const m = pose.bloque.margenSangrado;
     for (const tick of pose.ticks) {
       const dentroDelPliego =
         Math.min(tick.x1, tick.x2) >= 0 &&
@@ -91,11 +109,10 @@ describe('pose de referencia — mazo de tarot 320×470', () => {
       expect(dentroDelPliego).toBe(true);
     }
     // Ningún tick pisa la caja de sangrado del bloque.
-    const sangrado = pose.parametros.sangrado;
     for (const tick of pose.ticks.filter((t) => t.orientacion === 'vertical')) {
       const fueraDelArte =
-        Math.max(tick.y1, tick.y2) <= pose.bloque.margenSuperior - sangrado ||
-        Math.min(tick.y1, tick.y2) >= pose.pliego.alto - pose.bloque.margenInferior + sangrado;
+        Math.max(tick.y1, tick.y2) <= m.superior ||
+        Math.min(tick.y1, tick.y2) >= pose.pliego.alto - m.inferior;
       expect(fueraDelArte).toBe(true);
     }
     expect(pose.advertencias).toHaveLength(0);

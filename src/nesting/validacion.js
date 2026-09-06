@@ -52,7 +52,7 @@ export function validarParametros(params = {}, defaults) {
     throw new ErrorDePose('"permitirRotacion" tiene que ser true o false.', 'permitirRotacion');
   }
 
-  if (margenMinimo * 2 >= pliego.ancho || margenMinimo * 2 >= pliego.alto) {
+  if (margenMinimo > 0 && (margenMinimo * 2 >= pliego.ancho || margenMinimo * 2 >= pliego.alto)) {
     throw new ErrorDePose(
       `El margen mínimo de ${margenMinimo} mm no deja área útil en un pliego de ` +
         `${pliego.ancho}×${pliego.alto} mm.`,

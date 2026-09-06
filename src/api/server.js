@@ -1,6 +1,7 @@
 import express from 'express';
 import { rutasNesting } from './routes/nesting.js';
 import { rutasMateriales } from './routes/materiales.js';
+import { rutasTrabajo } from './routes/trabajo.js';
 import { logger } from '../utils/logger.js';
 
 export function crearApp() {
@@ -9,6 +10,7 @@ export function crearApp() {
 
   app.get('/health', (_req, res) => res.json({ estado: 'ok', servicio: 'io-calculadora-pliegos' }));
 
+  app.use('/api', rutasTrabajo);
   app.use('/api/nesting', rutasNesting);
   app.use('/api/materiales', rutasMateriales);
 

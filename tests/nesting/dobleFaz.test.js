@@ -8,7 +8,7 @@ const TAROT = {
   pieza: { ancho: 70, alto: 120 },
   sangrado: 3,
   espaciado: 0,
-  margenMinimo: 10,
+  margenMinimo: 0,
 };
 
 describe('pose doble faz — mazo de tarot', () => {
@@ -121,7 +121,7 @@ describe('pose doble faz — validaciones y utilidades', () => {
       pieza: { ancho: 80, alto: 80 },
       sangrado: 3,
       espaciado: 0,
-      margenMinimo: 10,
+      margenMinimo: 0,
       permitirRotacion: false,
     });
     expect(pose.columnas).toBe(3);

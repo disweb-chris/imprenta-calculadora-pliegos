@@ -5,70 +5,66 @@ se calibró.
 
 ---
 
-## 1. El modelo de márgenes
-
-Este es el punto donde la implementación **se aparta del spec original**, y es
-la razón por la que la pose de referencia sale bien.
+## 1. El modelo de medidas
 
 ### Definiciones
 
 | Término | Qué es |
 |---|---|
 | **trim** | El tamaño final de corte de la pieza. Lo que el cliente recibe. |
-| **sangrado** | Arte que se imprime más allá del trim (3 mm por lado) para que un corrimiento de guillotina no deje filo blanco. |
-| **espaciado** | Separación extra que se agrega entre calles, por encima del sangrado. |
+| **sangrado** (demasía) | Arte que se imprime más allá del trim, 3 mm por lado, para que un corrimiento de guillotina no deje filo blanco. |
+| **caja de sangrado** | `trim + sangrado × 2`. La mancha de tinta de una pieza. |
+| **espaciado** (separación) | Separación extra entre dos cajas de sangrado. |
 | **calle** | Separación entre dos líneas de trim contiguas: `sangrado × 2 + espaciado`. Es la tira de descarte que cae de la guillotina. |
-| **pitch** | Distancia entre el origen de una pieza y el de la siguiente: `lado + calle`. |
-| **bloque** | El rectángulo que va desde la primera línea de trim hasta la última. |
+| **pitch** | Distancia entre el origen de una pieza y el de la siguiente: `trim + calle`. |
 
-### La corrección
+### La fórmula
 
-El spec proponía:
-
-```
-columnas = floor(anchoUtil / pitchX)         donde anchoUtil = pliego - margen*2
-```
-
-Eso está mal, y falla exactamente en el caso de referencia. Con el pliego de
-tarot (320 × 470, pieza 70 × 120, sangrado 3, margen 10):
+N piezas ocupan `N · pitch − espaciado` de tinta: son N cajas de sangrado
+separadas por N−1 espaciados. De ahí:
 
 ```
-pitch  = 70 + 6 = 76
-útil   = 320 - 20 = 300
-floor(300 / 76) = 3 columnas        ← el spec da 3
+N = floor((pliego − margen · 2 + espaciado) / pitch)
 ```
 
-Pero la pose real tiene **4 columnas**. El error es contar una calle de más:
-después de la última pieza no hay calle, porque no hay pieza siguiente. Lo que
-tiene que respetar el margen mínimo es el **bloque de trim**, no el bloque de
-pitches.
+Con `margen = 0` esto es **exactamente** lo que hace la calculadora del sitio,
+que suma la demasía a la pieza y calcula
+`floor((pliego + separación) / (piezaEfectiva + separación))`. El port no
+cambia ningún número de producción: `tests/core/compatibilidadWidget.test.js`
+corre las dos implementaciones sobre 378 combinaciones y las compara.
 
-```
-n = floor((útil + calle) / pitch)
+> ⚠️ El spec original proponía `floor((pliego − margen·2) / pitch)`, que cuenta
+> una calle de más y da 3 columnas en la pose de tarot en vez de 4.
 
-floor((300 + 6) / 76) = floor(4.026) = 4 columnas   ✅
-floor((450 + 6) / 126) = floor(3.619) = 3 filas     ✅
-```
+### Los dos márgenes
 
-Consecuencia práctica: el sangrado exterior del bloque (3 mm) invade el margen.
-En la pose de tarot el margen de trim es 11 mm y el sangrado llega hasta los
-8 mm del borde del pliego. **Eso es correcto y es lo que pasa en producción**:
-el margen mínimo protege el corte, no la mancha de tinta.
+`margenMinimo` es una **restricción**, no una posición. Resuelta la grilla, el
+sobrante se reparte en partes iguales entre los dos lados. Se reportan dos
+márgenes porque el taller usa los dos:
 
-### Centrado
+| Margen | Del borde del pliego a… | Tarot |
+|---|---|---|
+| `bloque.margenSangrado` | el borde de la **tinta** | 8 mm lateral / 46 mm vertical |
+| `bloque.margen*` | la primera **línea de corte** | 11 mm lateral / 49 mm vertical |
 
-`margenMinimo` es una **restricción**, no una posición. Una vez resuelta la
-grilla, el sobrante (`pliego − bloque`) se reparte en partes iguales entre los
-dos márgenes:
+Siempre `margenTrim = margenSangrado + sangrado`. El de tinta es el que tiene
+que respetar la pinza de la máquina y donde entran las marcas de corte.
 
-```
-margen lateral       = (320 − 298) / 2 = 11 mm
-margen sup./inferior = (470 − 372) / 2 = 49 mm
-```
+Que lateral y vertical den distinto (11 ≠ 49) es la prueba de que el bloque va
+**centrado** y no anclado a un margen fijo. Además, el centrado es lo que hace
+que una pose doble faz registre sola (§ 4).
 
-Que den distinto (11 ≠ 49) es la prueba de que el bloque va centrado y no
-anclado a un margen fijo. Además, el centrado es lo que hace que una pose
-**doble faz registre sola** (ver sección 4).
+### El margen por defecto es 0
+
+La calculadora en producción **no tiene concepto de margen**: las piezas se
+acomodan contra el borde del pliego. Los 11 mm laterales de la pose de tarot
+son sobrante del centrado, no una restricción — de hecho la tinta llega a 8 mm
+del borde, que es menos que cualquier margen de pinza razonable.
+
+Por eso `margenMinimo` es **0 por defecto**, para no romper el contrato, y
+queda como parámetro opcional para las máquinas que sí necesitan pinza. No es
+gratis: pedir 10 mm de margen en la pose de tarot baja el trabajo de 12 a 10
+cartas por pliego.
 
 ---
 
@@ -98,7 +94,7 @@ entrada en `advertencias`.
 
 ### Pose de referencia verificada
 
-Mazo de tarot, pliego 320 × 470 mm. Reproducida por
+Mazo de tarot, pliego 320 × 470 mm, **sin margen**. Reproducida por
 `tests/nesting/poseReferencia.test.js` con tolerancia de ±0.5 mm.
 
 | Parámetro | Valor |
@@ -108,8 +104,8 @@ Mazo de tarot, pliego 320 × 470 mm. Reproducida por
 | Calle | 6 mm |
 | Pitch | 76 × 126 mm |
 | Grilla | 4 columnas × 3 filas = **12 piezas** |
-| Margen lateral | 11 mm |
-| Margen superior/inferior | 49 mm |
+| Margen lateral (trim / tinta) | 11 / 8 mm |
+| Margen sup.-inf. (trim / tinta) | 49 / 46 mm |
 | Líneas de marca | 14 (8 verticales + 6 horizontales) |
 | Total de marcas | 28 |
 
@@ -146,11 +142,13 @@ lado. Ambos están muy por debajo de la tolerancia de la guillotina.
 
 ## 3. Calibración por material
 
-Los cuatro casos reales del negocio salen con **un solo modelo**; lo único que
+Los cinco casos reales del negocio salen con **un solo modelo**; lo único que
 cambia entre soportes es el espaciado.
 
 | Material | Pliego | Pieza | Esperado | Calculado |
 |---|---|---|---|---|
+| Papel obra | 32×47 cm | 90×50 mm | 24 | **24** (3×8) |
+| Papel obra | 32×47 cm | 70×120 mm | 12 | **12** (4×3) |
 | Papel ilustración | A3 297×420 | 60×60 | ~24 | **24** (4×6) |
 | Papel ilustración | A3 297×420 | 70×40 | ~30 | **30** (6×5, rotada) |
 | Vinilo mate | 1000×1000 | 60×60 | ~169 | **169** (13×13) |
@@ -159,8 +157,8 @@ cambia entre soportes es el espaciado.
 ### Perfiles (`src/config/defaults.js`)
 
 ```js
-hoja:  { sangrado: 3, espaciado: 0, margenMinimo: 10 }
-rollo: { sangrado: 3, espaciado: 5, margenMinimo: 10 }
+hoja:  { sangrado: 3, espaciado: 0, margenMinimo: 0 }
+rollo: { sangrado: 3, espaciado: 6, margenMinimo: 0 }
 ```
 
 ### Cómo se llegó al perfil de rollo
@@ -168,36 +166,36 @@ rollo: { sangrado: 3, espaciado: 5, margenMinimo: 10 }
 El spec anticipaba que en material de rollo el cálculo teórico daría más piezas
 que las 169/228 reales, y pedía calibrar en vez de forzar el número.
 
-Con `margen 10 / espaciado 0` el metro de vinilo daría 15×15 = 225 stickers de
-60×60 y 13×24 = 312 de 70×40 — bastante más que lo que sale en producción. La
+Con el perfil de hoja (`espaciado 0`) el metro de vinilo da **225** stickers de
+60×60 y **273** de 70×40 — bastante más que lo que sale en producción. La
 diferencia es real: el vinilo se corta sobre material continuo y el avance del
 rollo tiene tolerancia mecánica, así que en el taller se deja más aire entre
 piezas.
 
 Se barrió el espacio `(margenMinimo, espaciado)` buscando las combinaciones que
-den **exactamente 169 y 228 al mismo tiempo**. Existe una región amplia de
-soluciones; la línea de combinaciones válidas va desde `(5, 6)` hasta `(30, 2)`
-—hay un intercambio entre margen y espaciado, como es de esperar.
-
-Se eligió **`margen 10 / espaciado 5`** por dos motivos:
-
-1. **Mantiene el margen en 10 mm**, igual que en hoja. El margen lo fija la
-   guillotina, que es la misma máquina para los dos soportes; no había razón
-   física para cambiarlo. Lo que cambia entre soportes es el aire entre piezas,
-   así que el único parámetro que se movió es el que corresponde.
-2. **Está en el centro de la región válida.** Con `margen 10` el espaciado
-   admite 5, 5.5 o 6; con espaciado 5 el margen admite de 9 a 15. Estar lejos de
-   los bordes significa que un cambio chico de formato no vuelca el resultado a
-   una fila o columna de más.
-
-Verificación con estos valores (calle = 6 + 5 = 11 mm):
+den **exactamente 169 y 228 al mismo tiempo**. Con `margenMinimo 0` —el valor
+de producción— el espaciado que cumple las dos condiciones es **6 o 7 mm**:
 
 ```
-60×60 → pitch 71 → floor((980 + 11) / 71) = 13 → 13 × 13 = 169  ✅
-70×40 → pitch 81 × 51 → floor(991/81) = 12, floor(991/51) = 19 → 228  ✅
+60×60 → 13 columnas exige   espaciado > 5.85  y  espaciado ≤ 11.83
+70×40 → 12 columnas exige   espaciado > 1     y  espaciado ≤ 8
+70×40 → 19 filas    exige   espaciado > 4.21  y  espaciado ≤ 7
+                            ────────────────────────────────────
+                            espaciado ∈ (5.85, 7]
 ```
 
-**No hay ningún número mágico en el código**: los 169 y 228 salen de la fórmula
+Se eligió **6 mm** por ser el extremo redondo del intervalo y porque es un
+valor que el operador puede tipear hoy mismo en el campo "Separación (mm entre
+piezas)" de la calculadora del sitio y obtener el mismo resultado.
+
+Verificación (calle = 3×2 + 6 = 12 mm):
+
+```
+60×60 → pitch 72 → floor((1000 + 6) / 72) = 13 → 13 × 13 = 169  ✅
+70×40 → pitch 82 × 52 → floor(1006/82) = 12, floor(1006/52) = 19 → 228  ✅
+```
+
+**No hay ningún número mágico en el código**: 169 y 228 salen de la fórmula
 general con estos dos parámetros.
 
 ### Cuándo recalibrar
@@ -206,6 +204,29 @@ Si el taller cambia de guillotina, de plotter de corte o de proveedor de
 vinilo, hay que rehacer este barrido con poses reales medidas. El procedimiento
 está en `tests/nesting/pose.test.js`: se agregan los casos nuevos y se ajusta el
 perfil hasta que pasen.
+
+---
+
+## 3b. Desempate de orientación
+
+Cuando las dos orientaciones dan la **misma cantidad**, hay que elegir una.
+
+La calculadora del sitio desempata por `sobranteAncho + sobranteAlto` y se
+queda con el menor. Eso suma un sobrante horizontal con uno vertical, que no
+son magnitudes comparables, y por eso **elige mal el mazo de tarot**:
+
+| Orientación | Grilla | Piezas | Sobrante A+B | Margen de tinta |
+|---|---|---|---|---|
+| Normal | 4 × 3 | 12 | 10.8 cm | 8 mm lateral / **46 mm** vertical |
+| Rotada | 2 × 6 | 12 | 8.2 cm | 34 mm lateral / **7 mm** vertical |
+
+El widget elige la rotada porque 8.2 < 10.8. Pero la pose real es la normal
+4×3: la rotada deja 7 mm de tinta al borde —donde no entran ni las marcas de
+corte— y obliga a girar el arte de las 78 cartas.
+
+Este módulo **prefiere no rotar a igualdad de cantidad**, que es la convención
+habitual y la que reproduce la pose de referencia. Ambas cantidades se exponen
+igual en `pose.alternativas` para que la UI las siga mostrando lado a lado.
 
 ---
 
@@ -291,9 +312,10 @@ selecciona con `estrategia: "..."` sin tocar a los consumidores.
 
 - **Sólo rectángulos, todos del mismo tamaño.** No hay nesting irregular ni
   mezcla de piezas distintas en un mismo pliego.
-- **Sin margen de pinza.** El modelo centra el bloque; una máquina que necesite
-  un margen asimétrico para la pinza requiere una estrategia de anclado nueva
-  (y ahí `registro` va a empezar a dar distinto de cero, a propósito).
+- **Margen de pinza simétrico.** `margenMinimo` se aplica igual a los cuatro
+  lados y el bloque se centra. Una máquina que necesite un margen asimétrico
+  (pinza sólo de un lado) requiere una estrategia de anclado nueva — y ahí
+  `registro` va a empezar a dar distinto de cero, a propósito.
 - **Rotación sólo a 90°.** No se prueban ángulos intermedios.
 - **El rollo se modela como un pliego fijo.** `1000 × 1000` es una convención
   para cotizar por m²; no se optimiza el largo de tirada continua.

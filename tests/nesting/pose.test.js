@@ -37,32 +37,63 @@ describe('casos reales del negocio', () => {
 });
 
 describe('modelo de márgenes', () => {
-  it('el margen mínimo se mide sobre el bloque de trim, no sobre el de pitch', () => {
-    // 4 columnas de 70 mm con calles de 6 mm ocupan 298 mm de trim en un
-    // pliego de 320: entran, aunque 4 pitches (304) más 2×10 de margen no.
-    const pose = calcularPose({
-      pliego: { ancho: 320, alto: 470 },
-      pieza: { ancho: 70, alto: 120 },
-      sangrado: 3,
-      margenMinimo: 10,
-    });
-    expect(pose.columnas).toBe(4);
-    expect(pose.bloque.ancho).toBe(298);
+  it('el margen mínimo se mide sobre la tinta, no sobre el trim', () => {
+    // 4 columnas de 70 mm con calles de 6 mm ocupan 298 mm de trim y 304 mm
+    // de tinta. Sin margen entran en un pliego de 320; con 10 mm de pinza
+    // (304 + 20 = 324 > 320) ya no.
+    const base = { pliego: { ancho: 320, alto: 470 }, pieza: { ancho: 70, alto: 120 }, sangrado: 3 };
+    const sinPinza = calcularPose({ ...base, margenMinimo: 0 });
+    expect(sinPinza.columnas).toBe(4);
+    expect(sinPinza.bloque.ancho).toBe(298);
+    expect(sinPinza.bloque.tinta.ancho).toBe(304);
+
+    const conPinza = calcularPose({ ...base, margenMinimo: 10, permitirRotacion: false });
+    expect(conPinza.columnas).toBe(3);
   });
 
-  it('nunca deja un margen de trim menor al mínimo pedido', () => {
+  it('replica la fórmula de la calculadora del sitio cuando no hay margen', () => {
+    // floor((pliego + separación) / (pieza + demasía*2 + separación))
+    const casos = [
+      [320, 470, 90, 50, 3, 0],
+      [297, 420, 60, 60, 3, 0],
+      [1000, 1000, 60, 60, 3, 6],
+      [216, 356, 45, 25, 2, 1],
+    ];
+    for (const [pw, ph, iw, ih, sangrado, espaciado] of casos) {
+      const pose = calcularPose({
+        pliego: { ancho: pw, alto: ph },
+        pieza: { ancho: iw, alto: ih },
+        sangrado,
+        espaciado,
+        margenMinimo: 0,
+        permitirRotacion: false,
+      });
+      const esperadoCols = Math.floor((pw + espaciado) / (iw + sangrado * 2 + espaciado));
+      const esperadoFilas = Math.floor((ph + espaciado) / (ih + sangrado * 2 + espaciado));
+      expect(pose.columnas).toBe(esperadoCols);
+      expect(pose.filas).toBe(esperadoFilas);
+    }
+  });
+
+  it('nunca deja la tinta más cerca del borde que el margen pedido', () => {
     for (const margenMinimo of [0, 5, 10, 15, 20]) {
       const pose = calcularPose({ pliego: A3, pieza: { ancho: 55, alto: 33 }, sangrado: 3, margenMinimo });
-      expect(pose.bloque.margenIzquierdo).toBeGreaterThanOrEqual(margenMinimo - 1e-9);
-      expect(pose.bloque.margenSuperior).toBeGreaterThanOrEqual(margenMinimo - 1e-9);
+      expect(pose.bloque.margenSangrado.izquierdo).toBeGreaterThanOrEqual(margenMinimo - 1e-9);
+      expect(pose.bloque.margenSangrado.superior).toBeGreaterThanOrEqual(margenMinimo - 1e-9);
     }
+  });
+
+  it('el margen de trim siempre supera al de tinta por el sangrado', () => {
+    const pose = calcularPose({ pliego: A3, pieza: { ancho: 55, alto: 33 }, sangrado: 3 });
+    expect(pose.bloque.margenIzquierdo - pose.bloque.margenSangrado.izquierdo).toBeCloseTo(3, 6);
+    expect(pose.bloque.margenSuperior - pose.bloque.margenSangrado.superior).toBeCloseTo(3, 6);
   });
 
   it('centra el bloque repartiendo el sobrante en partes iguales', () => {
     const pose = calcularPose({ pliego: A3, pieza: { ancho: 60, alto: 60 }, sangrado: 3, margenMinimo: 10 });
     expect(pose.bloque.margenIzquierdo).toBeCloseTo(pose.bloque.margenDerecho, 6);
     expect(pose.bloque.margenSuperior).toBeCloseTo(pose.bloque.margenInferior, 6);
-    expect(pose.bloque.margenIzquierdo * 2 + pose.bloque.ancho).toBeCloseTo(A3.ancho, 6);
+    expect(pose.bloque.margenSangrado.izquierdo * 2 + pose.bloque.tinta.ancho).toBeCloseTo(A3.ancho, 6);
   });
 });
 
@@ -121,12 +152,17 @@ describe('parámetros y edge cases', () => {
   });
 
   it('rechaza una pieza más grande que el pliego', () => {
-    expect(() => calcularPose({ pliego: A3, pieza: { ancho: 400, alto: 500 }, margenMinimo: 10 })).toThrow(ErrorDePose);
-    expect(() => calcularPose({ pliego: A3, pieza: { ancho: 400, alto: 500 }, margenMinimo: 10 })).toThrow(/no entra en un pliego/);
+    expect(() => calcularPose({ pliego: A3, pieza: { ancho: 400, alto: 500 } })).toThrow(ErrorDePose);
+    expect(() => calcularPose({ pliego: A3, pieza: { ancho: 400, alto: 500 } })).toThrow(/no entra en un pliego/);
   });
 
-  it('rechaza una pieza que sólo no entra por el margen', () => {
-    expect(() => calcularPose({ pliego: { ancho: 100, alto: 100 }, pieza: { ancho: 95, alto: 95 }, margenMinimo: 10 })).toThrow(/margen de 10 mm/);
+  it('rechaza una pieza que sólo no entra por la demasía', () => {
+    // 99 + 3×2 = 105 > 100: entra el trim pero no la tinta.
+    expect(() => calcularPose({ pliego: { ancho: 100, alto: 100 }, pieza: { ancho: 99, alto: 99 }, sangrado: 3 })).toThrow(/demasía/);
+  });
+
+  it('rechaza una pieza que sólo no entra por el margen de pinza', () => {
+    expect(() => calcularPose({ pliego: { ancho: 100, alto: 100 }, pieza: { ancho: 85, alto: 85 }, sangrado: 3, margenMinimo: 10 })).toThrow(/margen de 10 mm/);
   });
 
   it('rechaza medidas negativas o cero', () => {
@@ -150,11 +186,33 @@ describe('parámetros y edge cases', () => {
     expect(() => calcularPose({ pliego: A3, pieza: { ancho: 60, alto: 60 }, estrategia: 'genetico' })).toThrow(/Estrategia "genetico"/);
   });
 
-  it('usa A3 y el perfil de hoja como valores por defecto', () => {
+  it('usa el pliego 32×47 y el perfil de hoja como valores por defecto', () => {
     const pose = calcularPose({ pieza: { ancho: 60, alto: 60 } });
-    expect(pose.pliego).toEqual(A3);
-    expect(pose.parametros).toMatchObject({ sangrado: 3, espaciado: 0, margenMinimo: 10 });
-    expect(pose.cantidad).toBe(24);
+    expect(pose.pliego).toEqual({ ancho: 320, alto: 470 });
+    expect(pose.parametros).toMatchObject({ sangrado: 3, espaciado: 0, margenMinimo: 0 });
+    expect(pose.cantidad).toBe(28);
+  });
+
+  it('expone las dos orientaciones para que la UI las compare', () => {
+    const pose = calcularPose({ pliego: A3, pieza: { ancho: 70, alto: 40 }, sangrado: 3 });
+    expect(pose.alternativas.normal).toMatchObject({ cantidad: 27 });
+    expect(pose.alternativas.rotada).toMatchObject({ cantidad: 30 });
+    expect(pose.cantidad).toBe(30);
+  });
+
+  it('a igualdad de cantidad se queda con la orientación sin rotar', () => {
+    // Caso del mazo de tarot: 4×3 normal y 2×6 rotada dan 12 piezas. La
+    // calculadora del sitio desempata por sobrante y elige la rotada, que
+    // deja 7 mm de margen vertical y obliga a girar el arte.
+    const pose = calcularPose({
+      pliego: { ancho: 320, alto: 470 },
+      pieza: { ancho: 70, alto: 120 },
+      sangrado: 3,
+    });
+    expect(pose.alternativas.normal.cantidad).toBe(12);
+    expect(pose.alternativas.rotada.cantidad).toBe(12);
+    expect(pose.rotada).toBe(false);
+    expect(pose.columnas).toBe(4);
   });
 
   it('no muta el objeto de entrada', () => {
@@ -167,6 +225,7 @@ describe('parámetros y edge cases', () => {
   it('avisa cuando el margen no alcanza para las marcas de corte', () => {
     const pose = calcularPose({ pliego: { ancho: 300, alto: 300 }, pieza: { ancho: 100, alto: 100 }, sangrado: 0, espaciado: 0, margenMinimo: 0 });
     expect(pose.advertencias.length).toBeGreaterThan(0);
+    expect(pose.advertencias[0]).toMatch(/marcas de corte/);
   });
 });
 

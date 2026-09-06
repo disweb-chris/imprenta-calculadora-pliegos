@@ -8,7 +8,7 @@ const TAROT = {
   pieza: { ancho: 70, alto: 120 },
   sangrado: 3,
   espaciado: 0,
-  margenMinimo: 10,
+  margenMinimo: 0,
 };
 
 const contar = (svg, regex) => (svg.match(regex) ?? []).length;
