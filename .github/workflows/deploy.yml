@@ -23,6 +23,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:web
+        env:
+          CHROMIUM_PATH: ''
 
       - uses: google-github-actions/auth@v2
         with:

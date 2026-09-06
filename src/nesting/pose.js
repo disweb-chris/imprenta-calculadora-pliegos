@@ -36,6 +36,7 @@ export const estrategiasDisponibles = () => Object.keys(ESTRATEGIAS);
  * @param {number} [params.sangrado=3]                   Demasía por lado, en mm.
  * @param {number} [params.espaciado=0]                  Separación entre piezas, en mm.
  * @param {number} [params.margenMinimo=0]               Margen de pinza al borde, en mm.
+ * @param {number} [params.margenMarcas=5]               Lugar reservado para las marcas de corte, en mm.
  * @param {boolean} [params.permitirRotacion=true]       Probar la pieza girada 90°.
  * @param {string} [params.estrategia="shelf"]
  */
@@ -50,9 +51,9 @@ export function calcularPose(params = {}) {
   }
 
   const cfg = validarParametros(params, { ...PARAMETROS_POR_DEFECTO, pliego: PLIEGO_POR_DEFECTO });
-  const { pliego, pieza, sangrado, espaciado, margenMinimo, permitirRotacion } = cfg;
+  const { pliego, pieza, sangrado, espaciado, margenMinimo, margenMarcas, margenEfectivo, permitirRotacion } = cfg;
 
-  const grilla = resolver({ pliego, pieza, sangrado, espaciado, margenMinimo, permitirRotacion });
+  const grilla = resolver({ pliego, pieza, sangrado, espaciado, margenEfectivo, permitirRotacion });
   const { columnas, filas, cantidad, rotada, piezaEfectiva, orientacion, alternativas } = grilla;
 
   // Una pieza que no entra ni girada es un error del pedido, no un resultado 0.
@@ -60,7 +61,12 @@ export function calcularPose(params = {}) {
     throw new ErrorDePose(
       `La pieza de ${pieza.ancho}×${pieza.alto} mm con ${sangrado} mm de demasía por lado no entra ` +
         `en un pliego de ${pliego.ancho}×${pliego.alto} mm` +
-        (margenMinimo > 0 ? ` respetando un margen de ${margenMinimo} mm por lado.` : '.'),
+        (margenEfectivo > 0
+          ? ` dejando ${margenEfectivo} mm por lado` +
+            (margenEfectivo === margenMarcas && margenMarcas > margenMinimo
+              ? ' para las marcas de corte.'
+              : ' de margen.')
+          : '.'),
       'pieza',
     );
   }
@@ -93,7 +99,7 @@ export function calcularPose(params = {}) {
       ancho: redondear(piezaEfectiva.ancho + sangrado * 2),
       alto: redondear(piezaEfectiva.alto + sangrado * 2),
     },
-    parametros: { sangrado, espaciado, margenMinimo, permitirRotacion, calle },
+    parametros: { sangrado, espaciado, margenMinimo, margenMarcas, margenEfectivo, permitirRotacion, calle },
     bloque,
     pitch: { x: redondear(piezaEfectiva.ancho + calle), y: redondear(piezaEfectiva.alto + calle) },
     posiciones,

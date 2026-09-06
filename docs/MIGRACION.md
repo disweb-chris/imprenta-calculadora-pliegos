@@ -159,17 +159,58 @@ En el port: las tres primeras están cubiertas por la validación de
 
 ---
 
-## 4. Lo que falta decidir
+## 4. Decisión: el widget pasa a consumir el servicio
 
-El widget hoy calcula en el navegador. Tres caminos:
+De los tres caminos posibles (dejarlo calculando local, que llame al servicio,
+o reescribirlo entero) se tomó **el segundo**, por tres razones:
 
-1. **Dejarlo como está** y usar el servicio sólo para la pose y el SVG (que el
-   widget no sabe hacer). Cambio mínimo, pero la aritmética queda duplicada y
-   los bugs de la § 3 siguen vivos en el sitio.
-2. **Que el widget llame a `/api/calcular/compat`** y sólo pinte el resultado.
-   El HTML y el CSS no se tocan; se reemplaza la función `render()`. Un solo
-   lugar donde vive el cálculo.
-3. **Reescribir el widget** contra el contrato nativo en mm.
+1. **Es el único que arregla los bugs de la § 3 en el sitio.** Dejarlo local
+   los deja vivos; reescribirlo entero cuesta mucho más para el mismo efecto.
+2. **No toca el HTML ni el CSS.** Mismos `name` de campo, misma clave de
+   `localStorage`, mismas filas de resultado. Se reemplaza sólo el `<script>`.
+3. **Es lo único que puede mostrar la pose.** Armar el layout, las marcas de
+   guillotina y el SVG en el navegador significaría duplicar todo el módulo de
+   nesting en el cliente.
 
-La opción 2 es la que menos rompe y la que arregla los bugs de una. El endpoint
-ya está y testeado; falta la decisión y el reemplazo de `render()`.
+### Qué se hizo
+
+- `web/calculadora.js` — reemplazo del script del sitio. Llama a
+  `POST /api/calcular/compat` con debounce de 300 ms, cancela la request
+  anterior con `AbortController`, y pinta el mismo resultado de siempre más el
+  preview de la pose. En doble faz numera las piezas, que es la forma de ver de
+  un vistazo que el dorso está espejado.
+- `web/demo.html` — el widget completo (HTML y CSS del sitio, sin modificar)
+  apuntando a un servicio local, para probar sin tocar producción.
+- `tests/web/widget.test.js` — 12 tests de navegador contra el servicio real:
+  se corren con `npm run test:web` y en un job aparte de CI.
+- CORS en el servicio, configurable con `CORS_ORIGENES`.
+
+### Cómo se instala
+
+1. Reemplazar el contenido del `<script>` del widget por `web/calculadora.js`.
+2. Apuntar al servicio con `data-api="https://…"` en el div
+   `.io-pliegos-calc`, o dejando el default que ya trae el archivo.
+3. Restringir CORS en Cloud Run:
+   `--set-env-vars CORS_ORIGENES=https://imprentaonline.ar,https://www.imprentaonline.ar`
+
+### Lo que hay que tener en cuenta
+
+- **Arranque en frío.** Con `min-instances 0` la primera request después de un
+  rato tarda alrededor de un segundo. El widget muestra el resultado anterior
+  atenuado mientras espera, así que se nota poco; si molesta, se resuelve con
+  `--min-instances 1`.
+- **Si el servicio no responde**, el widget muestra un error y no cotiza. Es
+  deliberado: es preferible a que el sitio dé un precio con la aritmética
+  vieja, que es la que tiene los bugs. La alternativa —dejar el cálculo local
+  como respaldo— reintroduce la duplicación que esta migración vino a sacar.
+
+---
+
+## 5. Lo que sigue pendiente
+
+- **La tabla de precios real.** `materiales.precio` está en `null` y
+  `src/core/precios.js` recibe todos los importes como argumento en lugar de
+  tenerlos hardcodeados: no se inventó ningún número de negocio. Hoy los
+  precios los tipea el operador en el formulario.
+- **El bug 3.3 en el sitio viejo**, si el widget nuevo no se instala: el parche
+  de la § 3.3 lo arregla en el lugar.

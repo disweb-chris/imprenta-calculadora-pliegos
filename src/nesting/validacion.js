@@ -46,21 +46,26 @@ export function validarParametros(params = {}, defaults) {
   const sangrado = exigirNumero(params.sangrado ?? defaults.sangrado, 'sangrado');
   const espaciado = exigirNumero(params.espaciado ?? defaults.espaciado, 'espaciado');
   const margenMinimo = exigirNumero(params.margenMinimo ?? defaults.margenMinimo, 'margenMinimo');
+  const margenMarcas = exigirNumero(params.margenMarcas ?? defaults.margenMarcas, 'margenMarcas');
+
+  // Las dos son restricciones sobre la misma distancia (borde del pliego a la
+  // tinta), así que manda la más exigente.
+  const margenEfectivo = Math.max(margenMinimo, margenMarcas);
 
   const permitirRotacion = params.permitirRotacion ?? defaults.permitirRotacion;
   if (typeof permitirRotacion !== 'boolean') {
     throw new ErrorDePose('"permitirRotacion" tiene que ser true o false.', 'permitirRotacion');
   }
 
-  if (margenMinimo > 0 && (margenMinimo * 2 >= pliego.ancho || margenMinimo * 2 >= pliego.alto)) {
+  if (margenEfectivo > 0 && (margenEfectivo * 2 >= pliego.ancho || margenEfectivo * 2 >= pliego.alto)) {
     throw new ErrorDePose(
-      `El margen mínimo de ${margenMinimo} mm no deja área útil en un pliego de ` +
+      `Un margen de ${margenEfectivo} mm no deja área útil en un pliego de ` +
         `${pliego.ancho}×${pliego.alto} mm.`,
       'margenMinimo',
     );
   }
 
-  return { pliego, pieza, sangrado, espaciado, margenMinimo, permitirRotacion };
+  return { pliego, pieza, sangrado, espaciado, margenMinimo, margenMarcas, margenEfectivo, permitirRotacion };
 }
 
 /** Valida el eje de volteo de una pose doble faz. */

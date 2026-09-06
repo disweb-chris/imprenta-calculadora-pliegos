@@ -19,24 +19,29 @@
  * Con `margen = 0` esto es exactamente la fórmula de la calculadora en
  * producción, que suma la demasía a la pieza y hace
  * `floor((pliego + separación) / (piezaEfectiva + separación))`.
+ *
+ * El margen es el más exigente de dos restricciones sobre la misma distancia
+ * (borde del pliego a la tinta): `margenMinimo`, la pinza de la máquina, y
+ * `margenMarcas`, el lugar que necesitan las marcas de corte. Sin el segundo,
+ * el 27% de las poses sale sin manera de marcarla para la guillotina.
  */
 
 /**
  * Cuántas piezas de `lado` entran en `medida`.
  * Todas las medidas en mm.
  */
-export function contar({ medida, lado, sangrado, espaciado, margenMinimo }) {
+export function contar({ medida, lado, sangrado, espaciado, margenEfectivo }) {
   const pitch = lado + sangrado * 2 + espaciado;
   if (pitch <= 0) return 0;
-  const disponible = medida - margenMinimo * 2 + espaciado;
+  const disponible = medida - margenEfectivo * 2 + espaciado;
   if (disponible <= 0) return 0;
   return Math.max(0, Math.floor(disponible / pitch));
 }
 
 /** Calcula la grilla para una orientación concreta de la pieza. */
-export function calcularGrilla({ pliego, pieza, sangrado, espaciado, margenMinimo }) {
-  const columnas = contar({ medida: pliego.ancho, lado: pieza.ancho, sangrado, espaciado, margenMinimo });
-  const filas = contar({ medida: pliego.alto, lado: pieza.alto, sangrado, espaciado, margenMinimo });
+export function calcularGrilla({ pliego, pieza, sangrado, espaciado, margenEfectivo }) {
+  const columnas = contar({ medida: pliego.ancho, lado: pieza.ancho, sangrado, espaciado, margenEfectivo });
+  const filas = contar({ medida: pliego.alto, lado: pieza.alto, sangrado, espaciado, margenEfectivo });
   return { columnas, filas, cantidad: columnas * filas };
 }
 
@@ -58,7 +63,7 @@ const anchoDeTinta = (n, lado, sangrado, espaciado) =>
  * contra 46 mm de la derecha, y obliga a girar el arte de todas las cartas.
  * Ver docs/NESTING.md § "Desempate de orientación".
  */
-export function resolverShelf({ pliego, pieza, sangrado, espaciado, margenMinimo, permitirRotacion }) {
+export function resolverShelf({ pliego, pieza, sangrado, espaciado, margenEfectivo, permitirRotacion }) {
   const candidatos = [{ rotada: false, piezaEfectiva: { ancho: pieza.ancho, alto: pieza.alto } }];
 
   if (permitirRotacion && pieza.ancho !== pieza.alto) {
@@ -72,7 +77,7 @@ export function resolverShelf({ pliego, pieza, sangrado, espaciado, margenMinimo
       pieza: candidato.piezaEfectiva,
       sangrado,
       espaciado,
-      margenMinimo,
+      margenEfectivo,
     });
     // Sólo gana por cantidad estricta: a igualdad se queda el primero, que es
     // el candidato sin rotar.
@@ -83,13 +88,13 @@ export function resolverShelf({ pliego, pieza, sangrado, espaciado, margenMinimo
 
   // Las dos orientaciones, para que la UI pueda mostrarlas lado a lado.
   const alternativas = {
-    normal: calcularGrilla({ pliego, pieza, sangrado, espaciado, margenMinimo }),
+    normal: calcularGrilla({ pliego, pieza, sangrado, espaciado, margenEfectivo }),
     rotada: calcularGrilla({
       pliego,
       pieza: { ancho: pieza.alto, alto: pieza.ancho },
       sangrado,
       espaciado,
-      margenMinimo,
+      margenEfectivo,
     }),
   };
 

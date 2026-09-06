@@ -5,3 +5,5 @@ coverage
 tests
 docs
 *.log
+web
+vitest*.config.js

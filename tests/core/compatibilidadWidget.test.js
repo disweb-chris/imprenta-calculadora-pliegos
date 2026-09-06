@@ -77,6 +77,10 @@ function portado(e) {
       bleed: e.bleed, gutter: e.gutter,
     }),
     margenMinimo: 0,
+    // La comparación con producción se hace con la garantía de marcas
+    // apagada: es la única forma de probar que el port es fiel. El default
+    // del servicio es 5 mm; su efecto se mide en el bloque de divergencias.
+    margenMarcas: 0,
     cantidad: e.qty,
     merma: e.extraSheets,
     dobleFaz: e.doubleFace,
@@ -261,6 +265,31 @@ describe('divergencias conocidas con la calculadora en producción', () => {
     expect(423 / 47).toBe(9);
     expect(widgetOriginal(caso).alternativas.normal).toBe(24); // 3 × 8
     expect(portado(caso).pose.alternativas.normal.cantidad).toBe(27); // 3 × 9
+  });
+
+  it('la garantía de marcas descarta las poses que la guillotina no puede cortar', () => {
+    // 32×47 cm con pieza de 9×5 cm sin demasía y 3 mm de separación:
+    // producción dice 30 piezas (5×6), pero la tinta llega a 2.5 mm del borde
+    // y no hay lugar para el tick de 5 mm.
+    const caso = {
+      sheetW: 32, sheetH: 47, itemW: 9, itemH: 5, bleed: 0, gutter: 3,
+      qty: 250, extraSheets: 0, doubleFace: false,
+      costPaper: 0, costPrint: 0, costSetup: 0, prodPct: 0, profitPct: 0, applyVat: false,
+    };
+
+    expect(widgetOriginal(caso).count).toBe(30);
+
+    // Con la garantía apagada el port reproduce ese 30.
+    expect(portado(caso).piezasPorPliego).toBe(30);
+
+    // Con el default del servicio baja a 24, y esas 24 sí se pueden cortar.
+    const conGarantia = calcularTrabajo({
+      ...desdeCalculadora({ sheetW: 32, sheetH: 47, itemW: 9, itemH: 5, bleed: 0, gutter: 3 }),
+      cantidad: 250,
+    });
+    expect(conGarantia.piezasPorPliego).toBe(24);
+    expect(conGarantia.pose.bloque.margenSangrado.izquierdo).toBeGreaterThanOrEqual(5);
+    expect(conGarantia.pose.advertencias).toHaveLength(0);
   });
 
   it('la cantidad de pliegos y el costo no cambian por el desempate', () => {

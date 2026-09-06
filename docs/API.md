@@ -323,3 +323,20 @@ en milímetros.
 La respuesta es idéntica a la de `/api/calcular`. Existe para que el widget
 pueda pasar a consumir el servicio sin tocar el HTML del formulario; ver
 [MIGRACION.md](MIGRACION.md).
+
+### Parámetros de pose que acepta cualquier endpoint de cálculo
+
+| Campo | Default | Qué hace |
+|---|---|---|
+| `sangrado` | 3 | Demasía por lado, en mm. |
+| `espaciado` | 0 | Separación extra entre cajas de sangrado, en mm. |
+| `margenMinimo` | 0 | Margen de pinza: distancia mínima del borde a la tinta. |
+| `margenMarcas` | 5 | Lugar reservado para las marcas de corte. Ponerlo en 0 devuelve la pose de máximo rendimiento, sin garantía de que se pueda guillotinar. |
+| `permitirRotacion` | true | Probar la pieza girada 90°. |
+| `estrategia` | `"shelf"` | Algoritmo de imposición. |
+| `incluirSvg` | false | Adjunta el preview en el mismo response. |
+| `modoSvg` | `"preview"` | `"preview"` o `"produccion"`. |
+
+`margenMinimo` y `margenMarcas` son restricciones sobre la misma distancia
+(borde del pliego a la tinta), así que se resuelven tomando el más exigente. El
+efectivo se devuelve en `parametros.margenEfectivo`.

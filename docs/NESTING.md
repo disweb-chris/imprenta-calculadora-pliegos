@@ -54,7 +54,30 @@ Que lateral y vertical den distinto (11 ≠ 49) es la prueba de que el bloque va
 **centrado** y no anclado a un margen fijo. Además, el centrado es lo que hace
 que una pose doble faz registre sola (§ 4).
 
-### El margen por defecto es 0
+### La garantía de marcas
+
+Una pose sin lugar para las marcas no se puede guillotinar, así que no es una
+pose válida por más piezas que entren. `margenMarcas` (5 mm por defecto, el
+largo del tick) es la distancia mínima del borde del pliego a la tinta que el
+solver garantiza.
+
+Es una restricción sobre la misma distancia que `margenMinimo` (la pinza de la
+máquina), así que se resuelven tomando el más exigente:
+
+```
+margenEfectivo = max(margenMinimo, margenMarcas)
+```
+
+**Sin esta garantía, el 26.9% de las poses sale sin manera de marcarla.** Con
+ella, el rendimiento global cae al **96.8% del máximo teórico** — ese 3.2% es
+el precio de que ninguna pose salga imposible de cortar. Los seis casos reales
+del negocio (§ 3) **no cambian**: todos tenían de sobra.
+
+Poner `margenMarcas: 0` devuelve la pose de máximo rendimiento, que es lo que
+calcula hoy el sitio. `/api/calcular/compat` lo acepta para quien necesite
+reproducir un número viejo exacto.
+
+### El margen de pinza por defecto es 0
 
 La calculadora en producción **no tiene concepto de margen**: las piezas se
 acomodan contra el borde del pliego. Los 11 mm laterales de la pose de tarot

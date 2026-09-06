@@ -12,12 +12,14 @@
     "dev": "node --watch src/api/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:web": "vitest run --config vitest.web.config.js"
   },
   "dependencies": {
     "express": "^4.19.2"
   },
   "devDependencies": {
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "playwright": "^1.49.1"
   }
 }

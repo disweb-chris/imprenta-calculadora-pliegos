@@ -38,6 +38,10 @@ src/
 ├── config/
 │   └── defaults.js     demasía, espaciado y perfiles calibrados
 └── utils/logger.js     logger JSON lines para Cloud Logging
+
+web/
+├── calculadora.js      widget del sitio, ahora cliente del servicio
+└── demo.html           el widget completo para probar local
 ```
 
 **Regla arquitectónica:** `src/core/` y `src/nesting/` son **funciones puras**
@@ -88,14 +92,24 @@ curl -s localhost:8080/api/nesting/doble-faz/preview.svg?cara=dorso \
 ## Tests
 
 ```bash
-npm test              # una corrida
+npm test              # suite unitaria, ~2 s
+npm run test:web      # widget en un navegador real (necesita Chromium)
 npm run test:watch
 npm run test:coverage
 ```
 
-La suite incluye la **pose de referencia de producción** (mazo de tarot,
-320 × 470, 12 cartas) verificada coordenada por coordenada contra las marcas
-medidas en el pliego real, con tolerancia de ±0.5 mm.
+Qué cubre:
+
+- La **pose de referencia de producción** (mazo de tarot, 320 × 470, 12 cartas)
+  verificada coordenada por coordenada contra las marcas medidas en el pliego
+  real, con tolerancia de ±0.5 mm.
+- **Tests de propiedades** sobre 4.000 combinaciones de pliego y pieza al azar
+  (semilla fija): toda pose que se arma tiene lugar para sus marcas, los ticks
+  nunca pisan el arte, las piezas no se superponen y el dorso siempre registra.
+  La pose de tarot es una referencia, no el caso general.
+- Un **golden test** contra la calculadora que está hoy en el sitio: corre las
+  dos implementaciones sobre 378 combinaciones y compara campo por campo.
+- **12 tests de navegador** del widget contra el servicio real.
 
 ---
 
@@ -156,6 +170,25 @@ También está `cloudbuild.yaml` para el trigger de Cloud Build.
 
 Secrets que necesita el workflow: `GCP_WORKLOAD_IDENTITY_PROVIDER` y
 `GCP_SERVICE_ACCOUNT`.
+
+---
+
+## El widget del sitio
+
+`web/calculadora.js` reemplaza al script que calculaba en el navegador: mismo
+HTML, mismo CSS, mismos nombres de campo y misma clave de `localStorage`, pero
+los números salen del servicio y además muestra el preview de la pose con las
+marcas de guillotina.
+
+Para probarlo sin tocar producción:
+
+```bash
+npm start                      # el servicio en :8080
+npx http-server web -p 8096    # o cualquier estático
+# abrir http://localhost:8096/demo.html
+```
+
+Cómo instalarlo en el sitio y qué tener en cuenta: **[docs/MIGRACION.md](docs/MIGRACION.md)**.
 
 ---
 

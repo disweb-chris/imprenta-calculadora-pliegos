@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Calculadora de pliegos — demo local</title>
+<style>
+/* ── CSS del sitio, sin modificar ── */
+.io-pliegos-calc{--io-primary:#2E509E;--io-accent:#FF6B00;--io-bg:#F9FAFB;--io-card:#FFFFFF;--io-border:#E3EAF6;--io-text:#0F172A;--io-muted:#64748B;--io-radius:16px;--io-gap:12px;margin:24px 0!important;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif!important;color:var(--io-text)!important}
+.io-pliegos-calc *{box-sizing:border-box!important}
+.io-pliegos-calc .io-pc-card{background:var(--io-card)!important;border:1px solid var(--io-border)!important;border-radius:var(--io-radius)!important;padding:18px!important;box-shadow:0 6px 18px rgba(2,6,23,.05)!important;display:grid!important;grid-template-columns:1fr 480px!important;grid-template-rows:auto auto auto!important;column-gap:24px!important;align-items:start!important}
+.io-pliegos-calc .io-pc-head{grid-column:1/-1!important;margin-bottom:14px!important}
+.io-pliegos-calc .io-pc-title{margin:0!important;font-size:22px!important;line-height:1.2!important}
+.io-pliegos-calc .io-pc-sub{margin:6px 0 0!important;color:var(--io-muted)!important;font-size:13px!important;line-height:1.5!important}
+.io-pliegos-calc .io-pc-grid{grid-column:1!important;grid-row:2!important;display:grid!important;grid-template-columns:repeat(12,1fr)!important;gap:var(--io-gap)!important;align-content:start!important}
+.io-pliegos-calc .io-pc-field,.io-pliegos-calc .io-pc-field.small,.io-pliegos-calc .io-pc-field.tiny{grid-column:span 6!important}
+.io-pliegos-calc .io-pc-actions{grid-column:1!important;grid-row:3!important;display:flex!important;gap:10px!important;align-items:center!important;flex-wrap:wrap!important;margin-top:14px!important;align-self:start!important}
+.io-pliegos-calc .io-pc-out{grid-column:2!important;grid-row:2/4!important;margin-top:0!important}
+.io-pliegos-calc label{display:block!important;font-size:12px!important;color:var(--io-muted)!important;margin:0 0 6px!important;float:none!important;width:auto!important}
+.io-pliegos-calc input,.io-pliegos-calc select{width:100%!important;max-width:100%!important;display:block!important;padding:8px 12px!important;border:1px solid #D7E1F0!important;border-radius:12px!important;background:#fff!important;color:var(--io-text)!important;font-size:14px!important;line-height:1.2!important;outline:none!important;box-shadow:none!important}
+.io-pliegos-calc input[type=checkbox]{width:auto!important;display:inline-block!important;margin:0 8px 0 0!important;transform:translateY(1px)!important}
+.io-pliegos-calc .io-pc-inline{display:flex!important;align-items:center!important;gap:10px!important;flex-wrap:wrap!important;padding:10px 12px!important;border:1px dashed rgba(46,80,158,.2)!important;border-radius:12px!important;background:rgba(46,80,158,.04)!important}
+.io-pliegos-calc .io-pc-btn{border:0!important;border-radius:12px!important;padding:10px 14px!important;font-weight:800!important;cursor:pointer!important;background:var(--io-primary)!important;color:#fff!important}
+.io-pliegos-calc .io-pc-btn-ghost{background:#fff!important;color:var(--io-primary)!important;border:1px solid rgba(46,80,158,.25)!important}
+.io-pliegos-calc .io-pc-note{font-size:12px!important;color:var(--io-muted)!important}
+.io-pliegos-calc .io-pc-box{width:100%!important;max-width:100%!important;margin:0!important;padding:0 0 0 6px!important;background:#fff!important;border:1.5px solid var(--io-border)!important;border-radius:16px!important;overflow:hidden!important;position:sticky!important;top:20px!important}
+.io-pliegos-calc .io-pc-kv{display:grid!important;gap:0!important}
+.io-pliegos-calc .io-pc-kv .row{display:grid!important;grid-template-columns:minmax(180px,1fr) auto!important;gap:16px!important;align-items:center!important;padding:14px 18px!important;border-bottom:2px solid rgba(227,234,246,.95)!important;text-align:left!important}
+.io-pliegos-calc .io-pc-kv .row:nth-child(odd){background:rgba(249,250,251,.85)!important}
+.io-pliegos-calc .io-pc-kv .row:last-child{border-bottom:0!important}
+.io-pliegos-calc .io-pc-kv .k{grid-column:1!important;color:#475569!important;font-weight:700!important;line-height:1.25!important;padding-right:8px!important}
+.io-pliegos-calc .io-pc-kv .v{grid-column:2!important;justify-self:end!important;text-align:right!important;font-weight:900!important;color:#0f172a!important;white-space:nowrap!important;line-height:1.25!important}
+.io-pliegos-calc .io-pc-kv .row.total{background:rgba(46,80,158,.07)!important}
+.io-pliegos-calc .io-pc-kv .row.highlight{border-left:4px solid var(--io-accent)!important;padding-left:14px!important}
+.io-pliegos-calc .io-pc-pill{display:inline-block!important;font-size:12px!important;padding:4px 10px!important;border-radius:999px!important;background:rgba(255,107,0,.12)!important;color:#8A3B00!important;border:1px solid rgba(255,107,0,.22)!important;justify-self:end!important}
+.io-pliegos-calc .io-pc-err{background:#fff!important;border:1px solid #FFD2D2!important;color:#8A1F1F!important;border-radius:14px!important;padding:12px!important}
+.io-pliegos-calc .io-pc-two{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important;margin-top:12px!important}
+.io-pliegos-calc .io-pc-mini{background:#fff!important;border:1px solid var(--io-border)!important;border-radius:14px!important;padding:12px!important}
+.io-pliegos-calc .io-pc-mini .t{font-weight:900!important;margin:0 0 6px!important;font-size:13px!important}
+.io-pliegos-calc .io-pc-mini .m{margin:0!important;font-size:12px!important;color:var(--io-muted)!important;line-height:1.4!important}
+@media (max-width:900px){.io-pliegos-calc .io-pc-card{display:block!important}.io-pliegos-calc .io-pc-box{position:static!important;max-width:580px!important;margin:16px 0 0 auto!important}}
+@media (max-width:600px){.io-pliegos-calc .io-pc-field,.io-pliegos-calc .io-pc-field.small,.io-pliegos-calc .io-pc-field.tiny{grid-column:span 12!important}.io-pliegos-calc .io-pc-box{max-width:100%!important;margin:16px 0 0!important}.io-pliegos-calc .io-pc-two{grid-template-columns:1fr!important}}
+body{margin:0;padding:16px;background:#F9FAFB}
+</style>
+</head>
+<body>
+<!-- ── HTML del sitio, sin modificar salvo data-api para apuntar al local ── -->
+<div class="io-pliegos-calc" data-io-pliegos="1" data-api="http://127.0.0.1:8095" aria-label="Calculadora de pliegos Imprenta Online">
+  <div class="io-pc-card">
+    <div class="io-pc-head"><div>
+      <h2 class="io-pc-title">Calculadora de pliegos</h2>
+      <p class="io-pc-sub">Calcula imposición (con demasía), pliegos a imprimir y costos. Merma = pliegos extra (default 2).</p>
+    </div></div>
+    <div class="io-pc-grid">
+      <div class="io-pc-field small"><label for="io_paperType">Tipo de papel</label><select id="io_paperType" name="paperType"><option value="Obra 75g">Papel obra 75g</option><option value="Obra 90g">Papel obra 90g</option><option value="Ilustración 150g">Ilustración 150g</option><option value="Ilustración 300g">Ilustración 300g</option></select></div>
+      <div class="io-pc-field small"><label for="io_paperSize">Medida de pliego</label><select id="io_paperSize" name="paperSize"><option value="22x34">22 × 34 cm</option><option value="32x47" selected>32 × 47 cm</option><option value="21.6x35.6">Oficio / Legal (21.6 × 35.6 cm)</option><option value="21x29.7">A4 (21 × 29.7 cm)</option><option value="29.7x42">A3 (29.7 × 42 cm)</option><option value="100x100">1 m² (100 × 100 cm)</option><option value="custom">Personalizado</option></select></div>
+      <div class="io-pc-field"><label for="io_sheetW">Pliego - Ancho (cm)</label><input id="io_sheetW" name="sheetW" value="32" inputmode="decimal"></div>
+      <div class="io-pc-field"><label for="io_sheetH">Pliego - Alto (cm)</label><input id="io_sheetH" name="sheetH" value="47" inputmode="decimal"></div>
+      <div class="io-pc-field"><label for="io_itemW">Pieza - Ancho (cm)</label><input id="io_itemW" name="itemW" value="7" inputmode="decimal"></div>
+      <div class="io-pc-field"><label for="io_itemH">Pieza - Alto (cm)</label><input id="io_itemH" name="itemH" value="12" inputmode="decimal"></div>
+      <div class="io-pc-field tiny"><label for="io_bleed">Demasía (mm por lado)</label><input id="io_bleed" name="bleed" value="3" inputmode="decimal"></div>
+      <div class="io-pc-field tiny"><label for="io_gutter">Separación (mm entre piezas)</label><input id="io_gutter" name="gutter" value="0" inputmode="decimal"></div>
+      <div class="io-pc-field tiny"><label for="io_extraSheets">Merma (pliegos extra)</label><input id="io_extraSheets" name="extraSheets" value="2" inputmode="numeric"></div>
+      <div class="io-pc-field small"><label for="io_qty">Cantidad a producir (unid.)</label><input id="io_qty" name="qty" value="78" inputmode="numeric"></div>
+      <div class="io-pc-field small"><label>Impresión</label><div class="io-pc-inline"><label style="margin:0"><input name="doubleFace" type="checkbox" checked> Doble faz</label><span class="io-pc-note">Impresiones = pliegos × caras</span></div></div>
+      <div class="io-pc-field small"><label for="io_currency">Moneda</label><select id="io_currency" name="currency"><option value="$">$ (ARS)</option><option value="€">€</option><option value="USD">USD</option></select></div>
+      <div class="io-pc-field small"><label>Impuestos</label><div class="io-pc-inline"><label style="margin:0"><input name="applyVat" type="checkbox" checked> Aplicar IVA 21%</label></div></div>
+      <div class="io-pc-field"><label for="io_costPaper">Costo papel / pliego (opcional)</label><input id="io_costPaper" name="costPaper" value="120" inputmode="decimal"></div>
+      <div class="io-pc-field"><label for="io_costPrint">Costo impresión / pliego / cara (opcional)</label><input id="io_costPrint" name="costPrint" value="80" inputmode="decimal"></div>
+      <div class="io-pc-field"><label for="io_costSetup">Costo fijo por trabajo (opcional)</label><input id="io_costSetup" name="costSetup" value="5000" inputmode="decimal"></div>
+      <div class="io-pc-field tiny"><label for="io_prodPct">% Producción (opcional)</label><input id="io_prodPct" name="prodPct" value="15" inputmode="decimal"></div>
+      <div class="io-pc-field tiny"><label for="io_profitPct">% Ganancia (opcional)</label><input id="io_profitPct" name="profitPct" value="40" inputmode="decimal"></div>
+      <div class="io-pc-field"><label>&nbsp;</label><div class="io-pc-note">Demasía 3mm por lado = +0.6cm total en cada dimensión de la pieza.</div></div>
+    </div>
+    <div class="io-pc-actions">
+      <button type="button" class="io-pc-btn" data-action="calc">Calcular</button>
+      <button type="button" class="io-pc-btn io-pc-btn-ghost" data-action="reset">Reset</button>
+      <span class="io-pc-note">Guarda el último estado en este navegador.</span>
+    </div>
+    <div class="io-pc-out" aria-live="polite"></div>
+  </div>
+</div>
+<script src="./calculadora.js"></script>
+</body>
+</html>

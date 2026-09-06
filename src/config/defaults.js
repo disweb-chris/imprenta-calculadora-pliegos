@@ -18,6 +18,15 @@ export const PARAMETROS_POR_DEFECTO = Object.freeze({
   sangrado: 3,
   espaciado: 0,
   margenMinimo: 0,
+  /**
+   * Distancia mínima del borde del pliego a la tinta para que entren las
+   * marcas de corte. Es el largo del tick: si no hay al menos esto, la pose
+   * no se puede marcar y la guillotina no tiene por dónde cortarla.
+   *
+   * Poner 0 devuelve la pose de máximo rendimiento teórico, que es lo que
+   * calcula hoy el sitio; el 27% de esas poses no se puede marcar.
+   */
+  margenMarcas: 5,
   permitirRotacion: true,
   estrategia: 'shelf',
 });
@@ -34,8 +43,8 @@ export const PARAMETROS_POR_DEFECTO = Object.freeze({
  * docs/NESTING.md para el detalle del procedimiento.
  */
 export const PERFILES_SOPORTE = Object.freeze({
-  hoja: Object.freeze({ sangrado: 3, espaciado: 0, margenMinimo: 0 }),
-  rollo: Object.freeze({ sangrado: 3, espaciado: 6, margenMinimo: 0 }),
+  hoja: Object.freeze({ sangrado: 3, espaciado: 0, margenMinimo: 0, margenMarcas: 5 }),
+  rollo: Object.freeze({ sangrado: 3, espaciado: 6, margenMinimo: 0, margenMarcas: 5 }),
 });
 
 /** Geometría de las marcas de corte para guillotina. */

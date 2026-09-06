@@ -143,7 +143,10 @@ describe('parámetros y edge cases', () => {
   });
 
   it('con sangrado 0 y espaciado 0 las piezas quedan pegadas', () => {
-    const pose = calcularPose({ pliego: { ancho: 300, alto: 300 }, pieza: { ancho: 100, alto: 100 }, sangrado: 0, espaciado: 0, margenMinimo: 0 });
+    const pose = calcularPose({
+      pliego: { ancho: 300, alto: 300 }, pieza: { ancho: 100, alto: 100 },
+      sangrado: 0, espaciado: 0, margenMinimo: 0, margenMarcas: 0,
+    });
     expect(pose.cantidad).toBe(9);
     expect(pose.aprovechamiento).toBe(1);
     expect(pose.desperdicio_mm2).toBe(0);
@@ -162,7 +165,16 @@ describe('parámetros y edge cases', () => {
   });
 
   it('rechaza una pieza que sólo no entra por el margen de pinza', () => {
-    expect(() => calcularPose({ pliego: { ancho: 100, alto: 100 }, pieza: { ancho: 85, alto: 85 }, sangrado: 3, margenMinimo: 10 })).toThrow(/margen de 10 mm/);
+    expect(() => calcularPose({ pliego: { ancho: 100, alto: 100 }, pieza: { ancho: 85, alto: 85 }, sangrado: 3, margenMinimo: 10 }))
+      .toThrow(/dejando 10 mm por lado de margen/);
+  });
+
+  it('rechaza una pieza que sólo no entra por las marcas de corte', () => {
+    // 88 + 3×2 = 94 de tinta en 100 mm: quedan 3 mm por lado, menos que el tick.
+    expect(() => calcularPose({ pliego: { ancho: 100, alto: 100 }, pieza: { ancho: 88, alto: 88 }, sangrado: 3 }))
+      .toThrow(/marcas de corte/);
+    // Apagando la garantía, entra.
+    expect(calcularPose({ pliego: { ancho: 100, alto: 100 }, pieza: { ancho: 88, alto: 88 }, sangrado: 3, margenMarcas: 0 }).cantidad).toBe(1);
   });
 
   it('rechaza medidas negativas o cero', () => {
@@ -189,13 +201,16 @@ describe('parámetros y edge cases', () => {
   it('usa el pliego 32×47 y el perfil de hoja como valores por defecto', () => {
     const pose = calcularPose({ pieza: { ancho: 60, alto: 60 } });
     expect(pose.pliego).toEqual({ ancho: 320, alto: 470 });
-    expect(pose.parametros).toMatchObject({ sangrado: 3, espaciado: 0, margenMinimo: 0 });
-    expect(pose.cantidad).toBe(28);
+    expect(pose.parametros).toMatchObject({ sangrado: 3, espaciado: 0, margenMinimo: 0, margenMarcas: 5 });
+    // 4×6 = 24. Sin la garantía entrarían 7 filas (28 piezas), pero la tinta
+    // quedaría a 4 mm del borde y no habría dónde poner las marcas.
+    expect(pose.cantidad).toBe(24);
+    expect(calcularPose({ pieza: { ancho: 60, alto: 60 }, margenMarcas: 0 }).cantidad).toBe(28);
   });
 
   it('expone las dos orientaciones para que la UI las compare', () => {
     const pose = calcularPose({ pliego: A3, pieza: { ancho: 70, alto: 40 }, sangrado: 3 });
-    expect(pose.alternativas.normal).toMatchObject({ cantidad: 27 });
+    expect(pose.alternativas.normal).toMatchObject({ cantidad: 24 });
     expect(pose.alternativas.rotada).toMatchObject({ cantidad: 30 });
     expect(pose.cantidad).toBe(30);
   });
@@ -222,10 +237,29 @@ describe('parámetros y edge cases', () => {
     expect(entrada).toEqual(copia);
   });
 
-  it('avisa cuando el margen no alcanza para las marcas de corte', () => {
-    const pose = calcularPose({ pliego: { ancho: 300, alto: 300 }, pieza: { ancho: 100, alto: 100 }, sangrado: 0, espaciado: 0, margenMinimo: 0 });
+  it('avisa cuando se apaga la garantía y el margen no alcanza para las marcas', () => {
+    const pose = calcularPose({
+      pliego: { ancho: 300, alto: 300 }, pieza: { ancho: 100, alto: 100 },
+      sangrado: 0, espaciado: 0, margenMinimo: 0, margenMarcas: 0,
+    });
     expect(pose.advertencias.length).toBeGreaterThan(0);
     expect(pose.advertencias[0]).toMatch(/marcas de corte/);
+  });
+
+  it('con la garantía activada nunca hay advertencias de marcas', () => {
+    const pose = calcularPose({ pliego: { ancho: 300, alto: 300 }, pieza: { ancho: 100, alto: 100 }, sangrado: 0 });
+    expect(pose.cantidad).toBe(4);
+    expect(pose.advertencias).toHaveLength(0);
+    expect(pose.bloque.margenSangrado.izquierdo).toBeGreaterThanOrEqual(5);
+  });
+
+  it('margenMarcas y margenMinimo se resuelven tomando el más exigente', () => {
+    const marcas = calcularPose({ pliego: A3, pieza: { ancho: 40, alto: 40 }, sangrado: 3 });
+    expect(marcas.parametros.margenEfectivo).toBe(5);
+
+    const pinza = calcularPose({ pliego: A3, pieza: { ancho: 40, alto: 40 }, sangrado: 3, margenMinimo: 12 });
+    expect(pinza.parametros.margenEfectivo).toBe(12);
+    expect(pinza.cantidad).toBeLessThanOrEqual(marcas.cantidad);
   });
 });
 

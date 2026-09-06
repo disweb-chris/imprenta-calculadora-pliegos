@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { calcularTrabajo } from '../../core/trabajo.js';
 import { desdeCalculadora } from '../../core/unidades.js';
+import { generarSVG } from '../../nesting/svg.js';
 import { ErrorDePose } from '../../nesting/validacion.js';
 
 export const rutasTrabajo = Router();
@@ -20,6 +21,11 @@ function desdeContratoDelSitio(body = {}) {
     ...resto
   } = body;
 
+  // `paperType` y `currency` son etiquetas de la UI: no entran al cálculo.
+  delete resto.paperType;
+  delete resto.paperSize;
+  delete resto.currency;
+
   return {
     ...desdeCalculadora({ sheetW, sheetH, itemW, itemH, bleed, gutter }),
     cantidad: qty,
@@ -35,9 +41,32 @@ function desdeContratoDelSitio(body = {}) {
   };
 }
 
+/**
+ * Resuelve el trabajo y, si lo piden, adjunta el preview de la pose en el
+ * mismo response. Una sola ida y vuelta: la calculadora recalcula mientras el
+ * operador tipea y no conviene pedir el SVG aparte.
+ */
+function resolver(entrada) {
+  const { incluirSvg = false, modoSvg = 'preview', ...resto } = entrada;
+  if (!incluirSvg) return calcularTrabajo(resto);
+
+  const trabajo = calcularTrabajo({ ...resto, armarPose: true });
+
+  // En doble faz se numeran las piezas: es la única forma de ver de un vistazo
+  // que el dorso está espejado y que cada frente cae sobre su propio dorso.
+  const opciones = { modo: modoSvg, numerarPiezas: trabajo.pose.dobleFaz && modoSvg === 'preview' };
+
+  const svg = trabajo.pose.dobleFaz
+    ? { frente: generarSVG(trabajo.pose, { ...opciones, cara: 'frente' }),
+        dorso: generarSVG(trabajo.pose, { ...opciones, cara: 'dorso' }) }
+    : { unica: generarSVG(trabajo.pose, opciones) };
+
+  return { ...trabajo, svg };
+}
+
 /** Contrato nativo: todo en milímetros, nombres en español. */
 rutasTrabajo.post('/calcular', (req, res) => {
-  res.json(calcularTrabajo(req.body ?? {}));
+  res.json(resolver(req.body ?? {}));
 });
 
 /**
@@ -49,5 +78,5 @@ rutasTrabajo.post('/calcular/compat', (req, res) => {
   if (body.sheetW === undefined || body.itemW === undefined) {
     throw new ErrorDePose('Faltan las medidas: esperaba sheetW/sheetH e itemW/itemH en centímetros.', 'sheetW');
   }
-  res.json(calcularTrabajo(desdeContratoDelSitio(body)));
+  res.json(resolver(desdeContratoDelSitio(body)));
 });

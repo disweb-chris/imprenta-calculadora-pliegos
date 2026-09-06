@@ -4,8 +4,33 @@ import { rutasMateriales } from './routes/materiales.js';
 import { rutasTrabajo } from './routes/trabajo.js';
 import { logger } from '../utils/logger.js';
 
+/**
+ * CORS. El widget del sitio corre en imprentaonline.ar y consume este
+ * servicio desde el navegador, así que necesita el preflight resuelto.
+ * `CORS_ORIGENES` es una lista separada por comas; sin configurar, permite
+ * cualquier origen (el servicio no expone datos privados ni usa cookies).
+ */
+function cors(req, res, next) {
+  const permitidos = (process.env.CORS_ORIGENES ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+  const origen = req.headers.origin;
+
+  if (permitidos.length === 0) res.setHeader('Access-Control-Allow-Origin', '*');
+  else if (origen && permitidos.includes(origen)) {
+    res.setHeader('Access-Control-Allow-Origin', origen);
+    res.setHeader('Vary', 'Origin');
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Max-Age', '86400');
+
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  return next();
+}
+
 export function crearApp() {
   const app = express();
+  app.use(cors);
   app.use(express.json({ limit: '256kb' }));
 
   app.get('/health', (_req, res) => res.json({ estado: 'ok', servicio: 'io-calculadora-pliegos' }));

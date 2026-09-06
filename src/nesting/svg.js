@@ -44,8 +44,14 @@ export function generarSVG(pose, opciones = {}) {
 
   const capa = obtenerCara(pose, cara);
   const { pliego } = pose;
-  const grosor = n(MARCAS.grosorPt * PT_A_MM);
   const esProduccion = modo === 'produccion';
+  /**
+   * En producción el trazo es el de norma (0.25 pt ≈ 0.088 mm). En preview eso
+   * es invisible: el SVG se muestra a unos 200 px para un pliego de 320 mm, o
+   * sea 1 px cada 1.6 mm. Se engrosa para que el operador vea dónde va a caer
+   * la guillotina.
+   */
+  const grosor = n(esProduccion ? MARCAS.grosorPt * PT_A_MM : Math.max(pliego.ancho, pliego.alto) / 400);
   const colorMarca = esProduccion ? NEGRO_REGISTRO : NARANJA;
 
   const partes = [];
@@ -59,13 +65,13 @@ export function generarSVG(pose, opciones = {}) {
     // Borde del pliego y área de márgenes punteada.
     partes.push(
       `<rect x="0" y="0" width="${pliego.ancho}" height="${pliego.alto}" fill="none" ` +
-        `stroke="${AZUL}" stroke-width="0.3"/>`,
+        `stroke="${AZUL}" stroke-width="${grosor}"/>`,
     );
     const b = capa.bloque;
     partes.push(
       `<rect x="${n(b.margenIzquierdo)}" y="${n(b.margenSuperior)}" width="${n(b.ancho)}" ` +
-        `height="${n(b.alto)}" fill="none" stroke="${AZUL}" stroke-width="0.3" ` +
-        `stroke-dasharray="2 2" opacity="0.6"/>`,
+        `height="${n(b.alto)}" fill="none" stroke="${AZUL}" stroke-width="${grosor}" ` +
+        `stroke-dasharray="${n(grosor * 4)} ${n(grosor * 4)}" opacity="0.6"/>`,
     );
   }
 
@@ -84,7 +90,7 @@ export function generarSVG(pose, opciones = {}) {
       );
       partes.push(
         `<rect x="${n(p.x)}" y="${n(p.y)}" width="${n(p.ancho)}" height="${n(p.alto)}" ` +
-          `fill="${AZUL}" opacity="0.35" stroke="${AZUL}" stroke-width="0.3"/>`,
+          `fill="${AZUL}" opacity="0.35" stroke="${AZUL}" stroke-width="${grosor}"/>`,
       );
     }
   }
