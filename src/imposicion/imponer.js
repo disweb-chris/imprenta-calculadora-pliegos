@@ -17,6 +17,7 @@ import { calcularPose } from '../nesting/pose.js';
 import { calcularPoseDobleFaz, obtenerCara } from '../nesting/dobleFaz.js';
 import { ErrorDePose } from '../nesting/validacion.js';
 import { analizarPagina, resumirAnalisis } from './documento.js';
+import { resolverSeleccion } from './seleccion.js';
 import { dibujarConDemasiaEspejada, dibujarConDemasiaPropia } from './demasia.js';
 import { dibujarMarcas } from './marcas.js';
 import { mmApt } from './unidades.js';
@@ -25,6 +26,10 @@ import { mmApt } from './unidades.js';
  * @param {object} params
  * @param {Uint8Array} params.frente         PDF con el arte de las caras.
  * @param {Uint8Array} [params.dorso]        PDF del dorso. Una página = se repite.
+ *        Si se omite pero hay `paginasDorso`, el dorso sale del mismo PDF del frente.
+ * @param {number[]} [params.paginasFrente]  Páginas a imponer, 1-based y en orden.
+ *        Sirve para saltear una portada o corregir dos piezas cambiadas de lugar.
+ * @param {number[]} [params.paginasDorso]   Ídem para el dorso.
  * @param {{ancho:number,alto:number}} params.pieza   Tamaño de corte, en mm.
  * @param {"vertical"|"horizontal"} [params.ejeVolteo]
  * @param {"auto"|"siempre"|"nunca"} [params.demasiaSintetica="auto"]
@@ -39,6 +44,8 @@ import { mmApt } from './unidades.js';
 export async function imponer({
   frente,
   dorso,
+  paginasFrente,
+  paginasDorso,
   demasiaSintetica = 'auto',
   marcas = true,
   ejeVolteo,
@@ -47,48 +54,59 @@ export async function imponer({
   if (!frente) throw new ErrorDePose('Falta el PDF del frente.', 'frente');
 
   const origenFrente = await cargar(frente, 'frente');
-  const origenDorso = dorso ? await cargar(dorso, 'dorso') : null;
+  // Sin PDF de dorso propio, un `paginasDorso` toma las páginas del mismo archivo.
+  const origenDorso = dorso
+    ? await cargar(dorso, 'dorso')
+    : (paginasDorso ? origenFrente : null);
 
-  const pose = dorso
+  const elegidasFrente = resolverSeleccion(paginasFrente, origenFrente.getPageCount(), 'paginasFrente');
+  const elegidasDorso = origenDorso
+    ? resolverSeleccion(paginasDorso, origenDorso.getPageCount(), 'paginasDorso')
+    : [];
+
+  // Lo que decide si el trabajo es doble faz es que HAYA dorso, venga de su
+  // propio PDF o de páginas del mismo archivo del frente.
+  const pose = origenDorso
     ? calcularPoseDobleFaz({ ...parametrosDePose, ejeVolteo })
     : calcularPose(parametrosDePose);
 
   const porPliego = pose.cantidad;
-  const totalPiezas = origenFrente.getPageCount();
+  const totalPiezas = elegidasFrente.length;
   const pliegos = Math.ceil(totalPiezas / porPliego);
 
-  if (origenDorso) {
-    const nDorso = origenDorso.getPageCount();
-    if (nDorso !== 1 && nDorso !== totalPiezas) {
-      throw new ErrorDePose(
-        `El dorso tiene ${nDorso} páginas: esperaba 1 (el mismo dorso para todas) ` +
-          `o ${totalPiezas} (uno por pieza, igual que el frente).`,
-        'dorso',
-      );
-    }
+  if (origenDorso && elegidasDorso.length !== 1 && elegidasDorso.length !== totalPiezas) {
+    throw new ErrorDePose(
+      `El dorso aporta ${elegidasDorso.length} páginas: esperaba 1 (el mismo dorso para todas) ` +
+        `o ${totalPiezas} (uno por pieza, igual que el frente).`,
+      'dorso',
+    );
   }
 
   const salida = await PDFDocument.create();
   const sangradoPt = mmApt(pose.parametros.sangrado);
 
   const caras = [
-    { nombre: 'frente', origen: origenFrente, indicePagina: (i) => i },
+    { nombre: 'frente', origen: origenFrente, elegidas: elegidasFrente, indicePagina: (i) => i },
     origenDorso && {
       nombre: 'dorso',
       origen: origenDorso,
-      indicePagina: (i) => (origenDorso.getPageCount() === 1 ? 0 : i),
+      elegidas: elegidasDorso,
+      indicePagina: (i) => (elegidasDorso.length === 1 ? 0 : i),
     },
   ].filter(Boolean);
 
-  // Análisis del arte, una vez por página y por cara.
+  // Análisis del arte, una vez por página elegida y por cara.
   const analisis = {};
   for (const cara of caras) {
-    analisis[cara.nombre] = cara.origen.getPages().map((p) =>
-      analizarPagina(p, { pieza: pose.pieza, sangrado: pose.parametros.sangrado }));
+    analisis[cara.nombre] = cara.elegidas.map((iPagina) =>
+      analizarPagina(cara.origen.getPage(iPagina), { pieza: pose.pieza, sangrado: pose.parametros.sangrado }));
   }
 
-  const indeterminadas = Object.entries(analisis).flatMap(([cara, as]) =>
-    as.map((a, i) => ({ cara, pagina: i + 1, ...a })).filter((a) => a.demasia === 'indeterminada'));
+  const conNumeroDePagina = (cara) =>
+    analisis[cara.nombre].map((a, i) => ({ cara: cara.nombre, pagina: cara.elegidas[i] + 1, ...a }));
+
+  const indeterminadas = caras.flatMap((c) =>
+    conNumeroDePagina(c).filter((a) => a.demasia === 'indeterminada'));
   if (indeterminadas.length) {
     const primera = indeterminadas[0];
     throw new ErrorDePose(
@@ -97,8 +115,7 @@ export async function imponer({
     );
   }
 
-  const sinDemasia = Object.entries(analisis).flatMap(([cara, as]) =>
-    as.map((a, i) => ({ cara, pagina: i + 1, ...a })).filter((a) => !a.tieneDemasia));
+  const sinDemasia = caras.flatMap((c) => conNumeroDePagina(c).filter((a) => !a.tieneDemasia));
   if (sinDemasia.length && demasiaSintetica === 'nunca') {
     throw new ErrorDePose(
       `Hay ${sinDemasia.length} página(s) sin demasía y está deshabilitada la demasía sintética. ` +
@@ -112,10 +129,9 @@ export async function imponer({
   const embebidas = {};
   for (const cara of caras) {
     embebidas[cara.nombre] = await Promise.all(
-      cara.origen.getPages().map((p, i) => salida.embedPage(p, analisis[cara.nombre][i].recorte)));
+      cara.elegidas.map((iPagina, i) =>
+        salida.embedPage(cara.origen.getPage(iPagina), analisis[cara.nombre][i].recorte)));
   }
-
-  const usadas = { frente: 0, dorso: 0 };
 
   for (let pliego = 0; pliego < pliegos; pliego += 1) {
     const desde = pliego * porPliego;
@@ -134,10 +150,10 @@ export async function imponer({
         const info = analisis[cara.nombre][iArte];
         const destino = aPuntos(posicion, pose.pliego.alto);
 
-        if (info.tieneDemasia) dibujarConDemasiaPropia(hoja, arte, destino, sangradoPt);
-        else dibujarConDemasiaEspejada(hoja, arte, destino, sangradoPt);
-
-        usadas[cara.nombre] += 1;
+        // `pose.rotada` significa que la pieza va de costado en el pliego: el
+        // arte hay que girarlo 90°, no estirarlo dentro de una celda apaisada.
+        if (info.tieneDemasia) dibujarConDemasiaPropia(hoja, arte, destino, sangradoPt, pose.rotada);
+        else dibujarConDemasiaEspejada(hoja, arte, destino, sangradoPt, pose.rotada);
       }
 
       if (marcas) dibujarMarcas(hoja, { ...pose, ...capa }, pose.marcas);
@@ -151,15 +167,18 @@ export async function imponer({
       piezasPorPliego: porPliego,
       pliegos,
       caras: caras.map((c) => c.nombre),
+      paginasUsadas: Object.fromEntries(caras.map((c) => [c.nombre, c.elegidas.map((i) => i + 1)])),
       paginasDelPdf: salida.getPageCount(),
       lugaresVacios: pliegos * porPliego - totalPiezas,
       grilla: { columnas: pose.columnas, filas: pose.filas },
+      rotada: pose.rotada,
       pliego: pose.pliego,
       pieza: pose.pieza,
       ejeVolteo: pose.ejeVolteo ?? null,
       registro: pose.registro ?? null,
       marcasPorPliego: marcas ? pose.totalMarcas : 0,
-      demasia: Object.fromEntries(Object.entries(analisis).map(([cara, as]) => [cara, resumirAnalisis(as)])),
+      demasia: Object.fromEntries(caras.map((c) =>
+        [c.nombre, resumirAnalisis(analisis[c.nombre], c.elegidas)])),
       demasiaSintetica: sinDemasia.map((s) => ({ cara: s.cara, pagina: s.pagina })),
       advertencias: [
         ...pose.advertencias,

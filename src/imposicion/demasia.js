@@ -31,6 +31,34 @@ import {
 } from 'pdf-lib';
 
 /**
+ * Coloca el arte en una celda que puede estar girada 90°.
+ *
+ * Cuando la pose decide rotar la pieza, la celda queda apaisada pero el arte
+ * sigue siendo el mismo rectángulo parado: hay que **girarlo**, no estirarlo.
+ * Estirarlo deformaría el diseño, que es lo que pasaba antes de este cambio.
+ *
+ * Se gira 90° en sentido antihorario con la matriz [0 1 −1 0 tx ty], y el arte
+ * se dibuja en su orientación natural dentro del sistema girado.
+ *
+ * @param {Function} dibujar  Recibe la celda ya en el sistema de coordenadas
+ *        correcto y dibuja el arte ahí.
+ */
+function enLaCelda(hoja, celda, rotada, dibujar) {
+  if (!rotada) {
+    dibujar(celda);
+    return;
+  }
+
+  hoja.pushOperators(
+    pushGraphicsState(),
+    concatTransformationMatrix(0, 1, -1, 0, celda.x + celda.ancho, celda.y),
+  );
+  // Ya girado, la celda vuelve a ser la del arte: parada y en el origen.
+  dibujar({ x: 0, y: 0, ancho: celda.alto, alto: celda.ancho });
+  hoja.pushOperators(popGraphicsState());
+}
+
+/**
  * Dibuja una pieza con demasía espejada.
  *
  * @param {import('pdf-lib').PDFPage} hoja
@@ -41,8 +69,13 @@ import {
  * @param {number} destino.ancho
  * @param {number} destino.alto
  * @param {number} sangrado  En puntos.
+ * @param {boolean} [rotada=false]  La pose puso la pieza de costado.
  */
-export function dibujarConDemasiaEspejada(hoja, arte, destino, sangrado) {
+export function dibujarConDemasiaEspejada(hoja, arte, celda, sangrado, rotada = false) {
+  enLaCelda(hoja, celda, rotada, (destino) => espejarEn(hoja, arte, destino, sangrado));
+}
+
+function espejarEn(hoja, arte, destino, sangrado) {
   const { x, y, ancho, alto } = destino;
   const s = sangrado;
 
@@ -90,14 +123,16 @@ export function dibujarConDemasiaEspejada(hoja, arte, destino, sangrado) {
 }
 
 /**
- * Dibuja una pieza cuyo arte ya trae demasía: se estira la caja de sangrado
- * del origen sobre la caja de sangrado del destino, sin espejar nada.
+ * Dibuja una pieza cuyo arte ya trae demasía: la caja de sangrado del origen
+ * va sobre la caja de sangrado del destino, sin espejar nada.
  */
-export function dibujarConDemasiaPropia(hoja, arte, destino, sangrado) {
-  hoja.drawPage(arte, {
-    x: destino.x - sangrado,
-    y: destino.y - sangrado,
-    width: destino.ancho + sangrado * 2,
-    height: destino.alto + sangrado * 2,
+export function dibujarConDemasiaPropia(hoja, arte, celda, sangrado, rotada = false) {
+  enLaCelda(hoja, celda, rotada, (destino) => {
+    hoja.drawPage(arte, {
+      x: destino.x - sangrado,
+      y: destino.y - sangrado,
+      width: destino.ancho + sangrado * 2,
+      height: destino.alto + sangrado * 2,
+    });
   });
 }

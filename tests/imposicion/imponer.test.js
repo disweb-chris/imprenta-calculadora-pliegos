@@ -289,3 +289,131 @@ describe('validación de entrada', () => {
     })).rejects.toThrow(ErrorDePose);
   });
 });
+
+describe('selección y orden de páginas', () => {
+  it('impone sólo las páginas elegidas, en el orden pedido', async () => {
+    const { informe } = await imponer({
+      frente: await arteDePrueba({ paginas: 27 }),
+      paginasFrente: [3, 2, 4, 5],
+      ...TAROT,
+    });
+    expect(informe.piezas).toBe(4);
+    expect(informe.paginasUsadas.frente).toEqual([3, 2, 4, 5]);
+  });
+
+  it('saca el dorso del mismo PDF del frente', async () => {
+    const { informe } = await imponer({
+      frente: await arteDePrueba({ paginas: 27 }),
+      paginasFrente: [3, 2, ...Array.from({ length: 24 }, (_, i) => i + 4)],
+      paginasDorso: [1],
+      ...TAROT,
+    });
+    expect(informe.piezas).toBe(26);
+    expect(informe.caras).toEqual(['frente', 'dorso']);
+    expect(informe.paginasUsadas.dorso).toEqual([1]);
+  });
+
+  it('un dorso del mismo PDF sigue siendo doble faz y registra', async () => {
+    // Con el dorso tomado del mismo archivo, la pose tiene que espejarse igual:
+    // si no, el dorso no cae sobre su frente al dar vuelta el pliego.
+    const { informe } = await imponer({
+      frente: await arteDePrueba({ paginas: 13 }),
+      paginasFrente: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+      paginasDorso: [1],
+      ...TAROT,
+    });
+    expect(informe.ejeVolteo).toBe('vertical');
+    expect(informe.registro).toEqual({ desvioMaximo_mm: 0, registra: true });
+  });
+
+  it('el informe habla de la página del archivo, no de la posición en la selección', async () => {
+    const { informe } = await imponer({
+      frente: await arteDePrueba({ paginas: 10, conDemasia: false, declararCajas: false }),
+      paginasFrente: [7, 8],
+      ...TAROT,
+    });
+    expect(informe.demasia.frente.ausente).toEqual([7, 8]);
+    expect(informe.demasiaSintetica.map((d) => d.pagina)).toEqual([7, 8]);
+  });
+
+  it('rechaza una página que no existe', async () => {
+    await expect(imponer({
+      frente: await arteDePrueba({ paginas: 5 }),
+      paginasFrente: [1, 99],
+      ...TAROT,
+    })).rejects.toThrow(/pide la página 99, y el documento tiene 5/);
+  });
+});
+
+describe('interpretación de rangos de páginas', () => {
+  it('entiende números sueltos, rangos y el orden que se escribe', async () => {
+    const { interpretarRango } = await import('../../src/imposicion/seleccion.js');
+    expect(interpretarRango('1,3,5')).toEqual([1, 3, 5]);
+    expect(interpretarRango('4-7')).toEqual([4, 5, 6, 7]);
+    expect(interpretarRango('3,2,4-6')).toEqual([3, 2, 4, 5, 6]);
+    expect(interpretarRango('7-4')).toEqual([7, 6, 5, 4]);   // descendente
+    expect(interpretarRango(' 2 , 1 ')).toEqual([2, 1]);
+  });
+
+  it('rechaza lo que no entiende', async () => {
+    const { interpretarRango } = await import('../../src/imposicion/seleccion.js');
+    expect(() => interpretarRango('1,x,3')).toThrow(/No entiendo "x"/);
+    expect(() => interpretarRango('')).toThrow(/quedó vacío/);
+  });
+});
+
+describe('piezas rotadas en el pliego', () => {
+  /** Pieza parada en un pliego donde conviene ponerla de costado. */
+  const ROTA = {
+    pieza: { ancho: 85, alto: 125 },
+    pliego: { ancho: 320, alto: 470 },
+    sangrado: 3,
+    espaciado: 0,
+  };
+
+  it('la pose decide rotar cuando entran más piezas', async () => {
+    const { informe } = await imponer({ frente: await arteDePrueba({ paginas: 10, pieza: ROTA.pieza }), ...ROTA });
+    expect(informe.rotada).toBe(true);
+    expect(informe.grilla).toEqual({ columnas: 2, filas: 5 });
+    expect(informe.piezasPorPliego).toBe(10);
+  });
+
+  it('gira el arte 90° en vez de estirarlo dentro de la celda apaisada', async () => {
+    const { pdf } = await imponer({ frente: await arteDePrueba({ paginas: 10, pieza: ROTA.pieza }), ...ROTA });
+    const ops = operadoresDe(pdf);
+
+    // Una matriz de rotación por pieza: [0 1 −1 0 tx ty].
+    const rotaciones = ops.match(/0 1 -1 0 [\d.]+ [\d.]+ cm/g) ?? [];
+    expect(rotaciones).toHaveLength(10);
+
+    // Y ninguna matriz de escala que deforme: el arte se dibuja en su
+    // proporción natural, no achatado contra la celda.
+    const escalas = ops.match(/([\d.]+) 0 0 ([\d.]+) [\d.-]+ [\d.-]+ cm/g) ?? [];
+    for (const e of escalas) {
+      const [, sx, sy] = /([\d.]+) 0 0 ([\d.]+)/.exec(e);
+      if (Number(sx) === 1 && Number(sy) === 1) continue;      // traslaciones puras
+      expect(Number(sx)).toBeCloseTo(Number(sy), 3);            // escala uniforme
+    }
+  });
+
+  it('sin rotación no emite ninguna matriz de giro', async () => {
+    const { pdf, informe } = await imponer({
+      frente: await arteDePrueba({ paginas: 12 }),
+      ...TAROT,
+    });
+    expect(informe.rotada).toBe(false);
+    expect(operadoresDe(pdf).match(/0 1 -1 0 /g)).toBeNull();
+  });
+
+  it('gira igual el arte que vino sin demasía, con su espejado', async () => {
+    const { pdf, informe } = await imponer({
+      frente: await arteDePrueba({ paginas: 10, pieza: ROTA.pieza, conDemasia: false, declararCajas: false }),
+      ...ROTA,
+    });
+    expect(informe.rotada).toBe(true);
+    expect(informe.demasiaSintetica).toHaveLength(10);
+    // 9 dibujos por pieza (centro + 8 bandas) y una rotación por pieza.
+    expect(invocacionesDeXObject(operadoresDe(pdf))).toBe(10 * 9);
+    expect(operadoresDe(pdf).match(/0 1 -1 0 [\d.]+ [\d.]+ cm/g)).toHaveLength(10);
+  });
+});

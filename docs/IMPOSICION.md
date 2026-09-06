@@ -137,7 +137,39 @@ al margen. Ver [NESTING.md](NESTING.md) § 2.
 
 ---
 
-## 5. Pliegos incompletos
+## 5. Selección y orden de las páginas
+
+Un PDF real casi nunca viene listo para imponer tal cual. Trae una portada
+adelante, el dorso en la misma tirada, o dos piezas cambiadas de lugar.
+
+```bash
+--paginas "3,2,4-27"      # saltea la 1 y corrige dos cartas invertidas
+--dorso-paginas "1"       # el dorso sale del mismo PDF, página 1
+```
+
+El orden se respeta tal cual se escribe: `"3,2"` no es lo mismo que `"2,3"`.
+Un rango descendente (`"27-4"`) cuenta para atrás.
+
+El informe siempre habla de **la página del archivo** —la que el operador ve en
+su visor— y no de la posición dentro de la selección.
+
+---
+
+## 6. Piezas rotadas
+
+Cuando la pose decide poner la pieza de costado porque así entran más, el arte
+se **gira 90°**, no se estira dentro de una celda apaisada. Estirarlo
+deformaría el diseño.
+
+El giro es una matriz `[0 1 −1 0 tx ty]` aplicada antes de dibujar; el arte se
+coloca en su orientación natural dentro del sistema girado, y el espejado de
+demasía —si hace falta— se calcula ahí adentro, así que también sale bien.
+
+`informe.rotada` dice si el trabajo salió rotado.
+
+---
+
+## 7. Pliegos incompletos
 
 78 cartas en pliegos de 12 dan 7 pliegos: 84 lugares, 6 vacíos. Los lugares
 sobrantes quedan en blanco, y **el dorso tampoco se imprime ahí**.
@@ -148,7 +180,7 @@ no haya carta.
 
 ---
 
-## 6. Doble faz
+## 8. Doble faz
 
 El dorso puede ser:
 
@@ -163,7 +195,7 @@ cae exactamente sobre su propio dorso cuando se da vuelta el pliego. Ver
 
 ---
 
-## 7. Uso
+## 9. Uso
 
 ### Por línea de comandos
 
@@ -177,6 +209,14 @@ node bin/imponer.js \
   --pieza 70x120 \
   --pliego 320x470 \
   --salida pliegos.pdf
+```
+
+Con el dorso y la portada dentro del mismo archivo:
+
+```bash
+node bin/imponer.js \
+  --frente oraculo.pdf --paginas "3,2,4-27" --dorso-paginas "1" \
+  --pieza 85x125 --pliego 320x470 --salida pliegos.pdf
 ```
 
 ```
@@ -210,7 +250,7 @@ const { pdf, informe } = await imponer({
 
 ---
 
-## 8. Lo que falta
+## 10. Lo que falta
 
 - **Subida por el sitio.** Cloud Run corta el cuerpo de una request en 32 MB y
   un mazo en alta lo pasa holgado. La salida es subir a Cloud Storage con URL
@@ -219,7 +259,9 @@ const { pdf, informe } = await imponer({
   declara un OutputIntent. Para PDF/X habría que incorporarlo.
 - **Arte que no sea PDF.** Un JPG o un PNG se pueden imponer, pero ya vienen en
   RGB: la promesa de no tocar el color no aplica.
-- **Rotación de piezas dentro del pliego.** Hoy todas las piezas van en la
-  misma orientación que decide la pose. Un trabajo que necesite alternar
-  (cabeza con cabeza, para ahorrar papel en piezas trapezoidales) no está
-  contemplado.
+- **Orientación alternada.** Todas las piezas van en la misma orientación, la
+  que decide la pose. Un trabajo que necesite alternar cabeza con cabeza para
+  ahorrar papel en piezas trapezoidales no está contemplado.
+- **Orientación del dorso en piezas rotadas.** El dorso se gira igual que el
+  frente. Con un dorso simétrico —lo habitual en naipes— da igual; con un
+  dorso que tenga arriba y abajo, conviene revisar la primera prueba.

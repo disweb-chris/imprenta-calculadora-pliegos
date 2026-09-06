@@ -113,11 +113,18 @@ function recorteAlrededorDe(trim, margen) {
   };
 }
 
-/** Resume el análisis de todas las páginas, agrupando por diagnóstico. */
-export function resumirAnalisis(analisis) {
+/**
+ * Resume el análisis agrupando por diagnóstico.
+ *
+ * @param {object[]} analisis
+ * @param {number[]} [elegidas]  Índices 0-based en el documento original, para
+ *        que el informe hable de la página que el operador ve en su visor y no
+ *        de la posición dentro de la selección.
+ */
+export function resumirAnalisis(analisis, elegidas) {
   const porTipo = {};
   analisis.forEach((a, i) => {
-    (porTipo[a.demasia] ??= []).push(i + 1);
+    (porTipo[a.demasia] ??= []).push(elegidas ? elegidas[i] + 1 : i + 1);
   });
   return porTipo;
 }

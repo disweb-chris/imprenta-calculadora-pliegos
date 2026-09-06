@@ -12,6 +12,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { imponer } from '../src/imposicion/imponer.js';
+import { interpretarRango } from '../src/imposicion/seleccion.js';
 
 const AYUDA = `
 Imposición de pliegos — Imprenta Online
@@ -23,7 +24,11 @@ Obligatorio
   --pieza <ancho>x<alto>  Tamaño final de corte, en mm. Ej: 70x120
 
 Opcional
+  --paginas <rango>       Qué páginas del frente imponer y en qué orden.
+                          Ej: "3,2,4-27" saltea la 1 y corrige dos cambiadas.
   --dorso <pdf>           Dorso. Una página se repite; N páginas = una por pieza.
+                          Se puede omitir y usar --dorso-paginas sobre el mismo PDF.
+  --dorso-paginas <rango> Qué páginas usar de dorso.
   --pliego <ancho>x<alto> Pliego en mm (por defecto 320x470).
   --sangrado <mm>         Demasía por lado (3).
   --espaciado <mm>        Separación entre piezas (0).
@@ -68,6 +73,8 @@ async function principal() {
   const { pdf, informe } = await imponer({
     frente: await readFile(args.frente),
     dorso: args.dorso ? await readFile(args.dorso) : undefined,
+    paginasFrente: args.paginas ? interpretarRango(args.paginas, '--paginas') : undefined,
+    paginasDorso: args['dorso-paginas'] ? interpretarRango(args['dorso-paginas'], '--dorso-paginas') : undefined,
     pieza: medida(args.pieza, 'pieza'),
     pliego: args.pliego ? medida(args.pliego, 'pliego') : undefined,
     sangrado: numero(args.sangrado, 3),
@@ -86,6 +93,9 @@ async function principal() {
   l('por pliego', `${informe.piezasPorPliego} (${informe.grilla.columnas} × ${informe.grilla.filas})`);
   l('pliegos', `${informe.pliegos}${informe.lugaresVacios ? ` (${informe.lugaresVacios} lugares vacíos)` : ''}`);
   l('caras', informe.caras.join(' + '));
+  for (const [cara, pgs] of Object.entries(informe.paginasUsadas)) {
+    l(`páginas de ${cara}`, pgs.length > 8 ? `${pgs.length} (${pgs[0]}…${pgs.at(-1)})` : pgs.join(', '));
+  }
   l('páginas del PDF', informe.paginasDelPdf);
   l('marcas por pliego', informe.marcasPorPliego);
   if (informe.registro) l('registro frente/dorso', informe.registro.registra ? 'coincide' : `⚠ desvío ${informe.registro.desvioMaximo_mm} mm`);
