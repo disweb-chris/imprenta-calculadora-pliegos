@@ -10,6 +10,9 @@ Responde dos preguntas del taller:
    **doble faz** (frente y dorso registrados).
 2. **¿Cuántos pliegos hace falta comprar para una tirada?** — cálculo de
    pliegos, demasía y pasadas de máquina.
+3. **¿Cómo queda el pliego armado?** — imposición: se le da el PDF del arte y
+   devuelve los pliegos listos para imprimir, con las marcas encima y el color
+   del cliente intacto.
 
 Corre en Cloud Run y lo consumen el sitio y (a futuro) el bot de WhatsApp.
 
@@ -25,6 +28,12 @@ src/
 │   ├── precios.js      escalas por cantidad, costos, % y IVA
 │   ├── trabajo.js      composición: pose + pliegos + cotización
 │   └── unidades.js     conversión cm ↔ mm
+├── imposicion/      # el arte del cliente sobre el pliego
+│   ├── documento.js    lectura de cajas del PDF y detección de demasía
+│   ├── demasia.js      demasía sintética por espejado de bordes
+│   ├── marcas.js       marcas de guillotina en negro de registro
+│   ├── imponer.js      arma los pliegos
+│   └── unidades.js     milímetros ↔ puntos tipográficos
 ├── nesting/         # armado de pose
 │   ├── shelf.js        estrategia de grilla regular
 │   ├── layout.js       posiciones, líneas de trim y ticks de guillotina
@@ -131,6 +140,22 @@ Qué cubre:
 | `POST` | `/api/nesting/doble-faz` | Pose doble faz: frente, dorso y mapeo |
 | `POST` | `/api/nesting/preview.svg` | SVG del layout |
 | `POST` | `/api/nesting/doble-faz/preview.svg` | SVG de una cara (`?cara=frente\|dorso`) |
+
+## Imponer un trabajo
+
+```bash
+node bin/imponer.js --frente cartas.pdf --dorso dorso.pdf \
+  --pieza 70x120 --pliego 320x470 --salida pliegos.pdf
+```
+
+Un mazo de 78 cartas sale en 7 pliegos de 12, frente y dorso registrados, con
+las 28 marcas de guillotina por cara. El arte se embebe: los colores CMYK
+llegan intactos y los vectores siguen siendo vectores.
+
+Si el arte viene sin demasía, se genera espejando el borde y el informe lo
+marca. Cómo funciona todo eso: **[docs/IMPOSICION.md](docs/IMPOSICION.md)**.
+
+---
 
 Contrato completo con requests y responses de ejemplo: **[docs/API.md](docs/API.md)**.
 Cómo funciona el algoritmo y cómo se calibró: **[docs/NESTING.md](docs/NESTING.md)**.
