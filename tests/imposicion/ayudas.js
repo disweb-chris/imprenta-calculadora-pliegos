@@ -33,25 +33,50 @@ export async function arteDePrueba({
   return doc.save();
 }
 
-/** Devuelve todos los flujos de contenido del PDF, descomprimidos y concatenados. */
+/**
+ * Devuelve los flujos de CONTENIDO del PDF, descomprimidos y concatenados.
+ *
+ * Sólo entran los streams que descomprimen y que parecen texto de operadores.
+ * Los que no descomprimen (imágenes, fuentes) o son mayormente binarios se
+ * descartan: concatenarlos hacía que un regex como /\brg\b/ matcheara basura
+ * binaria de vez en cuando, y los tests salían inestables. El nombre que
+ * pdf-lib le da a cada página embebida lleva un número al azar, así que los
+ * bytes comprimidos —y la basura— cambian en cada corrida.
+ */
 export function operadoresDe(bytes) {
   const crudo = Buffer.from(bytes);
   const texto = crudo.toString('latin1');
-  let salida = '';
+  const partes = [];
   const re = /stream\r?\n/g;
   let m;
+
   while ((m = re.exec(texto))) {
     const ini = m.index + m[0].length;
     const fin = texto.indexOf('endstream', ini);
     if (fin < 0) continue;
-    const buf = crudo.subarray(ini, fin);
+
+    let contenido;
     try {
-      salida += `${zlib.inflateSync(buf).toString('latin1')}\n`;
+      contenido = zlib.inflateSync(crudo.subarray(ini, fin)).toString('latin1');
     } catch {
-      salida += `${buf.toString('latin1')}\n`;
+      continue; // no comprimido con Flate: no es un flujo de contenido
     }
+    if (pareceTexto(contenido)) partes.push(contenido);
   }
-  return salida;
+
+  return partes.join('\n');
+}
+
+/** Un flujo de operadores es ASCII imprimible casi en su totalidad. */
+function pareceTexto(s) {
+  if (s.length === 0) return false;
+  const muestra = s.slice(0, 4096);
+  let imprimibles = 0;
+  for (let i = 0; i < muestra.length; i += 1) {
+    const c = muestra.charCodeAt(i);
+    if (c === 9 || c === 10 || c === 13 || (c >= 32 && c <= 126)) imprimibles += 1;
+  }
+  return imprimibles / muestra.length > 0.95;
 }
 
 /** El PDF crudo, para buscar entradas del diccionario (/Subtype, etc.). */
