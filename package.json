@@ -1,0 +1,23 @@
+{
+  "name": "io-calculadora-pliegos",
+  "version": "1.0.0",
+  "description": "Calculadora de pliegos y armado de pose (nesting 2D) para Imprenta Online",
+  "type": "module",
+  "main": "src/api/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/api/server.js",
+    "dev": "node --watch src/api/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8"
+  }
+}
