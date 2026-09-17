@@ -250,7 +250,56 @@ const { pdf, informe } = await imponer({
 
 ---
 
-## 10. Lo que falta
+## 10. Medir y comparar pliegos
+
+`src/imposicion/medir.js` lee un pliego ya impuesto y reconstruye su pose a
+partir de lo que está **realmente dibujado**. No mira cómo se armó el archivo,
+así que sirve igual para un pliego de este servicio y para uno hecho a mano en
+Illustrator. Eso es lo que permite contrastar los dos.
+
+```bash
+node bin/comparar.js --a generada.pdf --b hecha-a-mano.pdf
+```
+
+```
+  mismo pliego           sí
+  líneas verticales      4 vs 4 — desvío 0 mm
+  líneas horizontales    10 vs 10 — desvío 0 mm
+
+  ✔ Las dos poses coinciden dentro de 0.5 mm.
+```
+
+### Cómo separa las marcas del arte
+
+El problema es que un filete decorativo de una carta es un trazo fino y corto
+igual que un tick de guillotina. La forma no alcanza. Se piden cuatro cosas a
+la vez, y sólo las marcas de corte las cumplen todas:
+
+1. **Oscuro.** Las marcas van en negro de registro; el arte casi nunca tiene
+   filetes negros puros.
+2. **Visible.** Los paths de recorte se llevan en una pila junto con la matriz
+   de transformación, y lo que queda fuera del recorte vigente se descarta. El
+   arte del cliente suele traer geometría afuera de su propia página, que se
+   ve como ruido si no se filtra.
+3. **Emparejado.** La misma coordenada tiene que aparecer en los dos bordes
+   opuestos del pliego: para cada línea de trim hay un tick arriba y otro
+   abajo.
+4. **Coherente.** El conjunto tiene que describir una grilla regular: piezas
+   todas iguales, calles todas iguales, y la pieza más grande que la calle.
+   Esto último evita leer la grilla corrida en uno y tomar las calles por
+   piezas.
+
+Se probaron dos criterios que **no** funcionan y quedaron descartados: acotar
+por la mancha de tinta —los fondos de página y los recortes la estiran hasta
+el borde del pliego— y agrupar las bandas encadenando tolerancias, que con
+mucho trazo termina fusionando las marcas con los filetes.
+
+`tests/imposicion/medir.test.js` cierra el círculo: impone una pose conocida,
+mide el PDF como si viniera de afuera, y verifica que salga la misma.
+
+---
+
+## 11. Lo que falta
 
 - **Subida por el sitio.** Cloud Run corta el cuerpo de una request en 32 MB y
   un mazo en alta lo pasa holgado. La salida es subir a Cloud Storage con URL

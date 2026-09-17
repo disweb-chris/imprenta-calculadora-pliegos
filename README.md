@@ -30,6 +30,8 @@ src/
 │   └── unidades.js     conversión cm ↔ mm
 ├── imposicion/      # el arte del cliente sobre el pliego
 │   ├── documento.js    lectura de cajas del PDF y detección de demasía
+│   ├── medir.js        reconstruye la pose de un pliego ya impuesto
+│   ├── seleccion.js    qué páginas entran y en qué orden
 │   ├── demasia.js      demasía sintética por espejado de bordes
 │   ├── marcas.js       marcas de guillotina en negro de registro
 │   ├── imponer.js      arma los pliegos
@@ -154,6 +156,15 @@ llegan intactos y los vectores siguen siendo vectores.
 
 Si el arte viene sin demasía, se genera espejando el borde y el informe lo
 marca. Cómo funciona todo eso: **[docs/IMPOSICION.md](docs/IMPOSICION.md)**.
+
+Para contrastar una pose generada contra una armada a mano:
+
+```bash
+node bin/comparar.js --a generada.pdf --b hecha-a-mano.pdf
+```
+
+Mide las dos leyendo las marcas de corte que están realmente dibujadas, sin
+importar cómo se construyó cada archivo, y reporta el desvío en milímetros.
 
 ---
 

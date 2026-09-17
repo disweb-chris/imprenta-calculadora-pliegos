@@ -15,7 +15,8 @@
     "test:coverage": "vitest run --coverage",
     "test:web": "vitest run --config vitest.web.config.js",
     "build:web": "esbuild src/web/entrada.js --bundle --format=iife --global-name=IOPose --target=es2019 --outfile=web/pose.bundle.js --banner:js='/* Generado por `npm run build:web` desde src/. No editar a mano. */'",
-    "imponer": "node bin/imponer.js"
+    "imponer": "node bin/imponer.js",
+    "comparar": "node bin/comparar.js"
   },
   "dependencies": {
     "express": "^4.19.2",
@@ -23,10 +24,12 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
+    "pdfjs-dist": "^6.3.289",
     "playwright": "^1.49.1",
     "vitest": "^2.1.8"
   },
   "bin": {
-    "io-imponer": "bin/imponer.js"
+    "io-imponer": "bin/imponer.js",
+    "io-comparar": "bin/comparar.js"
   }
 }
